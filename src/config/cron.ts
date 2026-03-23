@@ -8,7 +8,10 @@ const setupCronPrints = () => {
       logger.info(
         "Serviço do cron que vai tirar prints do Poder360 no futuro iniciado e rodando! :D"
       );
-      takeScreenshotsService();
+      takeScreenshotsService({
+        width: 728,
+        height: 90
+      });
     } catch (error) {
       if (error instanceof Error) {
         logger.error(`Erro ao iniciar o cron de tirar prints: ${error.message}`);
