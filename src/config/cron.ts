@@ -10,7 +10,9 @@ const setupCronPrints = () => {
       );
       takeScreenshotsService({
         width: 728,
-        height: 90
+        height: 90,
+        ad_name: 'Campanha de Teste',
+        po_number: "123456"
       });
     } catch (error) {
       if (error instanceof Error) {

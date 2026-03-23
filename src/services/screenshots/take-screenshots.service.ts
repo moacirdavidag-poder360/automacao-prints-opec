@@ -5,17 +5,27 @@ import fs from "node:fs";
 import path from "node:path";
 import logger from "../../config/logger.config.js";
 import type { ITakeScreenshotsType } from "../../types/take-screenshots.type.js";
+import dayjs from "dayjs";
 
 const takeScreenshotsService = async (args: ITakeScreenshotsType) => {
-  logger.info("[INFO] Iniciando o tirar prints do Poder360...");
+  const { width, height, ad_name, po_number } = args;
 
-  const { width, height } = args;
+  logger.info(
+    `[INFO] Iniciando o tirar prints da campanha ${ad_name} - ${width}x${height}...`
+  );
 
   logger.debug(
     `[DEBUG] Iniciando o serviço de tirar prints para o tamanho ${width}x${height}`
   );
 
-  const screenshotsDir = path.resolve(process.cwd(), "screenshots");
+  let TODAY: string = dayjs().format("DD-MM-YYYY");
+
+  const screenshotsDir = path.resolve(
+    process.cwd(),
+    "screenshots",
+    po_number,
+    TODAY
+  );
 
   if (!fs.existsSync(screenshotsDir)) {
     fs.mkdirSync(screenshotsDir, { recursive: true });
@@ -55,7 +65,8 @@ const takeScreenshotsService = async (args: ITakeScreenshotsType) => {
           window.scrollBy(0, distance);
           total += distance;
 
-          if (total >= document.body.scrollHeight) {
+          const scrollHeight = document.body.scrollHeight;
+          if (total >= scrollHeight) {
             clearInterval(timer);
             resolve();
           }
@@ -64,6 +75,11 @@ const takeScreenshotsService = async (args: ITakeScreenshotsType) => {
     });
 
     await page.waitForTimeout(4000);
+
+    await page.evaluate(() => {
+      const adVideoBlock = document.querySelector('.HPR_VIDEO') as HTMLElement;
+      adVideoBlock.style.display = 'none';
+    })
 
     await page.evaluate(
       ({ width, height }) => {
@@ -96,9 +112,18 @@ const takeScreenshotsService = async (args: ITakeScreenshotsType) => {
 
     for (const iframe of iframes) {
       await iframe.scrollIntoViewIfNeeded();
-
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(6000);
     }
+
+    const filename = path.join(screenshotsDir, `${width}x${height}.png`);
+
+    await screenshot({
+      filename: filename,
+    });
+
+    logger.info(
+      `[INFO] Print da campanha ${ad_name} - formato: ${width}x${height} tirado com sucesso em: ${filename}`
+    );
   } catch (error) {
     if (error instanceof Error) {
       logger.error(
