@@ -6,6 +6,7 @@ import path from "node:path";
 import logger from "../../config/logger.config.js";
 import type { ITakeScreenshotsType } from "../../types/take-screenshots.type.js";
 import dayjs from "dayjs";
+import { uploadFileToDrive } from "../googleDrive/google-drive-upload.service.js";
 
 const takeScreenshotsService = async (args: ITakeScreenshotsType) => {
   const { width, height, ad_name, po_number } = args;
@@ -77,9 +78,9 @@ const takeScreenshotsService = async (args: ITakeScreenshotsType) => {
     await page.waitForTimeout(4000);
 
     await page.evaluate(() => {
-      const adVideoBlock = document.querySelector('.HPR_VIDEO') as HTMLElement;
-      adVideoBlock.style.display = 'none';
-    })
+      const adVideoBlock = document.querySelector(".HPR_VIDEO") as HTMLElement;
+      adVideoBlock.style.display = "none";
+    });
 
     await page.evaluate(
       ({ width, height }) => {
@@ -124,6 +125,23 @@ const takeScreenshotsService = async (args: ITakeScreenshotsType) => {
     logger.info(
       `[INFO] Print da campanha ${ad_name} - formato: ${width}x${height} tirado com sucesso em: ${filename}`
     );
+
+    try {
+      await uploadFileToDrive({
+        filePath: filename,
+        poNumber: po_number,
+      });
+
+      logger.info(
+        `[GoogleDrive] Upload realizado com sucesso para ${po_number}/${TODAY}`
+      );
+    } catch (uploadError) {
+      logger.error("[GoogleDrive] Falha ao enviar screenshot", {
+        filePath: filename,
+        poNumber: po_number,
+        error: uploadError,
+      });
+    }
   } catch (error) {
     if (error instanceof Error) {
       logger.error(

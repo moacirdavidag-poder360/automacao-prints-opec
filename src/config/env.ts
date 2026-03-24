@@ -17,4 +17,6 @@ function required(name: string): string {
 export const ENV_VARS = {
   NODE_ENV: required("NODE_ENV"),
   PORT: required("PORT"),
+  ID_PASTA_GOOGLE_DRIVE: require('ID_PASTA_GOOGLE_DRIVE'),
+  PATH_ARQUIVO_AUTH_GOOGLE_CLOUD: require('PATH_ARQUIVO_AUTH_GOOGLE_CLOUD')
 };
