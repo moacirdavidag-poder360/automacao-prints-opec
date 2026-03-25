@@ -1,24 +1,24 @@
 import { chromium } from "playwright";
 import type { Browser } from "playwright";
 import screenshot from "screenshot-desktop";
+import dayjs from "dayjs";
 import fs from "node:fs";
 import path from "node:path";
 import logger from "../../config/logger.config.js";
-import dayjs from "dayjs";
 
 import { uploadFileToDrive } from "../googleDrive/google-drive-upload.service.js";
 
 import type { ICampaignsObjectType } from "../../types/campaigns.type.js";
 
-import { sanitize } from "../../utils/functions.js";
+import { delay, sanitize } from "../../utils/functions.js";
 
 const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
   const { customer, format, startDate, endDate, name, poNumber, previewLink } =
     campaign;
-  const { width, height } = format;
+  const { width, height, type } = format;
 
   logger.info(
-    `[INFO] Iniciando o tirar prints da campanha ${name} - ${width}x${height} - Cliente ${customer}...`
+    `[INFO] Iniciando o tirar prints da campanha ${name} - ${width}x${height} - ${type} - Cliente ${customer}...`
   );
 
   logger.debug(
@@ -119,6 +119,11 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
       `iframe[id^="google_ads_iframe_"][width="${width}"][height="${height}"]`
     );
 
+    if(iframes.length === 0) {
+      logger.error(`[ERRO] Nenhum anúncio da campanha ${name} - Formato: ${width}x${height} foi encontrado!`);
+      return;
+    }
+
     for (const iframe of iframes) {
       await iframe.scrollIntoViewIfNeeded();
       await page.waitForTimeout(6000);
@@ -126,27 +131,38 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
 
     const filename = path.join(screenshotsDir, `${width}x${height}.png`);
 
+    // await page.evaluate(() => {
+    //   window.location.href = 'https://poder360.com.br'
+    // })
+
+    // await delay(1000);
+
     await screenshot({
       filename: filename,
+    }).catch((error) => {
+      logger.error(`Erro ao tirar print da campanha: ${name} - formato: ${width}x${height} - Erro: ${error}`)
+    }).finally(() => {
+      logger.info(
+        `[INFO] Print da campanha ${name} - formato: ${width}x${height} - Cliente ${customer} - tirado com sucesso em: ${filename}`
+      );
     });
 
-    logger.info(
-      `[INFO] Print da campanha ${name} - formato: ${width}x${height} - Cliente ${customer} - tirado com sucesso em: ${filename}`
-    );
+    
 
     try {
       await uploadFileToDrive({
         filePath: filename,
-        poNumber: poNumber,
+        campaingName: safeDirectoryName,
       });
 
       logger.info(
-        `[GoogleDrive] Upload realizado com sucesso para ${poNumber}/${TODAY}`
+        `[GoogleDrive] Upload realizado com sucesso para ${safeDirectoryName}/${TODAY}`
       );
     } catch (uploadError) {
       logger.error("[GoogleDrive] Falha ao enviar screenshot", {
         filePath: filename,
-        poNumber: poNumber,
+        customerName: name,
+        format: `${width}x${height}`,
         error: uploadError,
       });
     }
