@@ -4,15 +4,21 @@ import screenshot from "screenshot-desktop";
 import fs from "node:fs";
 import path from "node:path";
 import logger from "../../config/logger.config.js";
-import type { ITakeScreenshotsType } from "../../types/take-screenshots.type.js";
 import dayjs from "dayjs";
+
 import { uploadFileToDrive } from "../googleDrive/google-drive-upload.service.js";
 
-const takeScreenshotsService = async (args: ITakeScreenshotsType) => {
-  const { width, height, ad_name, po_number } = args;
+import type { ICampaignsObjectType } from "../../types/campaigns.type.js";
+
+import { sanitize } from "../../utils/functions.js";
+
+const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
+  const { customer, format, startDate, endDate, name, poNumber, previewLink } =
+    campaign;
+  const { width, height } = format;
 
   logger.info(
-    `[INFO] Iniciando o tirar prints da campanha ${ad_name} - ${width}x${height}...`
+    `[INFO] Iniciando o tirar prints da campanha ${name} - ${width}x${height} - Cliente ${customer}...`
   );
 
   logger.debug(
@@ -21,10 +27,12 @@ const takeScreenshotsService = async (args: ITakeScreenshotsType) => {
 
   let TODAY: string = dayjs().format("DD-MM-YYYY");
 
+  const safeDirectoryName = sanitize(name);
+
   const screenshotsDir = path.resolve(
     process.cwd(),
     "screenshots",
-    po_number,
+    safeDirectoryName,
     TODAY
   );
 
@@ -50,7 +58,7 @@ const takeScreenshotsService = async (args: ITakeScreenshotsType) => {
 
     const page = await context.newPage();
 
-    await page.goto("https://www.poder360.com.br", {
+    await page.goto(previewLink, {
       waitUntil: "domcontentloaded",
       timeout: 60000,
     });
@@ -123,22 +131,22 @@ const takeScreenshotsService = async (args: ITakeScreenshotsType) => {
     });
 
     logger.info(
-      `[INFO] Print da campanha ${ad_name} - formato: ${width}x${height} tirado com sucesso em: ${filename}`
+      `[INFO] Print da campanha ${name} - formato: ${width}x${height} - Cliente ${customer} - tirado com sucesso em: ${filename}`
     );
 
     try {
       await uploadFileToDrive({
         filePath: filename,
-        poNumber: po_number,
+        poNumber: poNumber,
       });
 
       logger.info(
-        `[GoogleDrive] Upload realizado com sucesso para ${po_number}/${TODAY}`
+        `[GoogleDrive] Upload realizado com sucesso para ${poNumber}/${TODAY}`
       );
     } catch (uploadError) {
       logger.error("[GoogleDrive] Falha ao enviar screenshot", {
         filePath: filename,
-        poNumber: po_number,
+        poNumber: poNumber,
         error: uploadError,
       });
     }
