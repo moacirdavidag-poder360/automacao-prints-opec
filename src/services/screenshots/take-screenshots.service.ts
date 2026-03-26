@@ -1,10 +1,14 @@
 import { chromium } from "playwright";
-import type { Browser } from "playwright";
 import screenshot from "screenshot-desktop";
 import dayjs from "dayjs";
 import fs from "node:fs";
 import path from "node:path";
 import logger from "../../config/logger.config.js";
+
+import customParseFormat from "dayjs/plugin/customParseFormat.js";
+import isBetween from "dayjs/plugin/isBetween.js";
+dayjs.extend(customParseFormat);
+dayjs.extend(isBetween);
 
 import { uploadFileToDrive } from "../googleDrive/google-drive-upload.service.js";
 
@@ -23,33 +27,40 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
     kvIndex,
     kvTotal,
   } = campaign;
+
   const { width, height, type } = format;
 
   logger.info(
     `[INFO] Iniciando o tirar prints da campanha ${name} - ${width}x${height} - ${type} - Cliente ${customer}...`
   );
 
-  logger.debug(
-    `[DEBUG] Iniciando o serviço de tirar prints para o tamanho ${width}x${height}`
+  const TODAY = dayjs().format("DD-MM-YYYY");
+  const TODAY_DATE = dayjs();
+
+  const startDateObject = dayjs(startDate, "DD/MM/YYYY");
+  const endDateObject = dayjs(endDate, "DD/MM/YYYY");
+
+  const isCampaignPeriodValid = TODAY_DATE.isBetween(
+    startDateObject,
+    endDateObject,
+    "day",
+    "[]"
   );
 
-  let TODAY: string = dayjs().format("DD-MM-YYYY");
-
-  let typeSuffix = "";
-
-  if (type.toLowerCase().includes("desktop")) {
-    typeSuffix = "D";
+  if (!isCampaignPeriodValid) {
+    logger.warn(
+      `[WARNING] A campanha ${name} não tá em período de veiculação: ${startDate} à ${endDate} - Hoje é: ${TODAY}`
+    );
+    return;
   }
 
-  if (type.toLowerCase().includes("mobile")) {
-    typeSuffix = "M";
-  }
+  let typeSuffix = type.toLowerCase().includes("desktop")
+    ? "D"
+    : type.toLowerCase().includes("mobile")
+    ? "M"
+    : "";
 
-  let kvPart = "";
-
-  if (kvTotal && kvTotal > 1) {
-    kvPart = `_KV${kvIndex}`;
-  }
+  let kvPart = kvTotal && kvTotal > 1 ? `_KV${kvIndex}` : "";
 
   const safeDirectoryName = sanitize(name);
 
@@ -64,36 +75,60 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
     fs.mkdirSync(screenshotsDir, { recursive: true });
   }
 
-  let browser: Browser | null = null;
+  let browser: any = null;
 
   try {
-    const userDataDir = path.resolve(".chrome-profile");
+    const userDataPath = process.env.GOOGLE_CHROME_PROFILE_PATH;
 
-    browser = await chromium.launch({
+    if (!fs.existsSync(userDataPath)) {
+      fs.mkdirSync(userDataPath, { recursive: true });
+    }
+
+    const executablePath = process.env.GOOGLE_CHROME_PATH as string;
+
+    logger.debug(`[DEBUG] Abrindo Chrome com perfil: ${userDataPath}`);
+
+    browser = await chromium.launchPersistentContext(userDataPath, {
       headless: false,
-
-      executablePath: process.env.GOOGLE_CHROME_PATH,
-
+      executablePath: executablePath,
+      ignoreHTTPSErrors: true,
+      viewport: null,
       args: [
         "--start-maximized",
-        "--window-position=0,0",
-        "--window-size=1920,1080",
+        "--disable-sync",
+        "--disable-features=DevToolsDebuggingRestrictions",
+        "--disable-blink-features=AutomationControlled",
         "--disable-infobars",
-        "--disable-extensions-except",
-        "--load-extension",
+        "--no-first-run",
+        "--no-default-browser-check",
       ],
     });
 
-    const context = await browser.newContext({
-      viewport: null,
+    const page = await browser.newPage();
+
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "webdriver", {
+        get: () => undefined,
+      });
     });
 
-    const page = await context.newPage();
+    logger.debug(`[DEBUG] Página criada: ${page}`);
+
+    logger.debug(`[DEBUG] Navegando para: ${previewLink}`);
 
     await page.goto(previewLink, {
       waitUntil: "domcontentloaded",
       timeout: 60000,
     });
+
+    logger.debug(`[DEBUG] Página carregada`);
+
+    await page.waitForTimeout(6000);
+
+    const pageUrl = page.url();
+    const pageTitle = await page.title();
+
+    logger.info(`[INFO] URL: ${pageUrl} | Título: ${pageTitle}`);
 
     await page.waitForTimeout(4000);
 
@@ -107,6 +142,7 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
           total += distance;
 
           const scrollHeight = document.body.scrollHeight;
+
           if (total >= scrollHeight) {
             clearInterval(timer);
             resolve();
@@ -119,11 +155,11 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
 
     await page.evaluate(() => {
       const adVideoBlock = document.querySelector(".HPR_VIDEO") as HTMLElement;
-      adVideoBlock.style.display = "none";
+      if (adVideoBlock) adVideoBlock.style.display = "none";
     });
 
     await page.evaluate(
-      ({ width, height }) => {
+      ({ width, height }: { width: number; height: number }) => {
         const iframes = document.querySelectorAll(
           'iframe[id^="google_ads_iframe_"]'
         );
@@ -143,6 +179,20 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
             if (parent2) parent2.style.display = "none";
           }
         });
+
+        if (!(width === 970 && height === 90)) {
+          const footerBanner = document.querySelector(
+            ".box-banner-footer-desktop"
+          ) as HTMLElement;
+
+          if (footerBanner) {
+            const button = footerBanner.querySelector("button") as HTMLElement;
+
+            if (button) {
+              button.click();
+            }
+          }
+        }
       },
       { width, height }
     );
@@ -153,7 +203,7 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
 
     if (iframes.length === 0) {
       logger.error(
-        `[ERRO] Nenhum anúncio da campanha ${name} - Formato: ${width}x${height} foi encontrado!`
+        `[ERRO] Nenhum anúncio encontrado - Campanha: ${name}, Formato: ${width}x${height}`
       );
       return;
     }
@@ -175,18 +225,14 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
     const DELAY_MS = Number(process.env.DELAY_PRINT_MS) || 1000;
     await delay(DELAY_MS);
 
-    await screenshot({
-      filename: filename,
-    })
+    await screenshot({ filename: filename })
       .catch((error) => {
         logger.error(
-          `Erro ao tirar print da campanha: ${name} - formato: ${width}x${height} - Erro: ${error}`
+          `[ERRO] Falha ao tirar print: ${name} - ${width}x${height} - ${error}`
         );
       })
       .finally(() => {
-        logger.info(
-          `[INFO] Print da campanha ${name} - formato: ${width}x${height} - Cliente ${customer} - tirado com sucesso em: ${filename}`
-        );
+        logger.info(`[INFO] Print tirado com sucesso: ${filename}`);
       });
 
     try {
@@ -196,24 +242,20 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
       });
 
       logger.info(
-        `[GoogleDrive] Upload realizado com sucesso para ${safeDirectoryName}/${TODAY}`
+        `[INFO] Upload para Google Drive realizado: ${safeDirectoryName}/${TODAY}`
       );
     } catch (uploadError) {
-      logger.error("[GoogleDrive] Falha ao enviar screenshot", {
-        filePath: filename,
-        customerName: name,
-        format: `${width}x${height}`,
+      logger.error("[ERRO] Falha ao fazer upload para Google Drive", {
+        file: filename,
         error: uploadError,
       });
     }
   } catch (error) {
-    if (error instanceof Error) {
-      logger.error(
-        `Erro ao iniciar o serviço de tirar prints: ${error.message}`
-      );
-    } else {
-      logger.error("Erro ao iniciar o serviço de tirar prints:", error);
-    }
+    logger.error(
+      `[ERRO] Falha no serviço de screenshots: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
   } finally {
     if (browser) {
       await browser.close();

@@ -4,5 +4,6 @@ declare namespace NodeJS {
     ID_PASTA_GOOGLE_DRIVE: string;
     DELAY_PRINT_MS: string | number;
     GOOGLE_CHROME_PATH: string;
+    GOOGLE_CHROME_PROFILE_PATH: string;
   }
 }
