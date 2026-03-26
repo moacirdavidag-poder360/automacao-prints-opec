@@ -67,12 +67,20 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
   let browser: Browser | null = null;
 
   try {
+    const userDataDir = path.resolve(".chrome-profile");
+
     browser = await chromium.launch({
       headless: false,
+
+      executablePath: process.env.GOOGLE_CHROME_PATH,
+
       args: [
         "--start-maximized",
         "--window-position=0,0",
         "--window-size=1920,1080",
+        "--disable-infobars",
+        "--disable-extensions-except",
+        "--load-extension",
       ],
     });
 
@@ -164,7 +172,8 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
       history.replaceState({}, "", location.origin + "/");
     });
 
-    await delay(1000);
+    const DELAY_MS = Number(process.env.DELAY_PRINT_MS) || 1000;
+    await delay(DELAY_MS);
 
     await screenshot({
       filename: filename,
