@@ -145,3 +145,7 @@ vite.config.ts.timestamp-*
 
 # Prints tirados
 /screenshots
+
+# Minha chave do Google Cloud para acessar a API do Google Drive
+
+secret.json

@@ -1,18 +1,32 @@
 import { chromium } from "playwright";
 import type { Browser } from "playwright";
 import screenshot from "screenshot-desktop";
+import dayjs from "dayjs";
 import fs from "node:fs";
 import path from "node:path";
 import logger from "../../config/logger.config.js";
-import type { ITakeScreenshotsType } from "../../types/take-screenshots.type.js";
-import dayjs from "dayjs";
+
 import { uploadFileToDrive } from "../googleDrive/google-drive-upload.service.js";
 
-const takeScreenshotsService = async (args: ITakeScreenshotsType) => {
-  const { width, height, ad_name, po_number } = args;
+import type { ICampaignsObjectType } from "../../types/campaigns.type.js";
+
+import { delay, sanitize } from "../../utils/functions.js";
+
+const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
+  const {
+    customer,
+    format,
+    startDate,
+    endDate,
+    name,
+    previewLink,
+    kvIndex,
+    kvTotal,
+  } = campaign;
+  const { width, height, type } = format;
 
   logger.info(
-    `[INFO] Iniciando o tirar prints da campanha ${ad_name} - ${width}x${height}...`
+    `[INFO] Iniciando o tirar prints da campanha ${name} - ${width}x${height} - ${type} - Cliente ${customer}...`
   );
 
   logger.debug(
@@ -21,10 +35,28 @@ const takeScreenshotsService = async (args: ITakeScreenshotsType) => {
 
   let TODAY: string = dayjs().format("DD-MM-YYYY");
 
+  let typeSuffix = "";
+
+  if (type.toLowerCase().includes("desktop")) {
+    typeSuffix = "D";
+  }
+
+  if (type.toLowerCase().includes("mobile")) {
+    typeSuffix = "M";
+  }
+
+  let kvPart = "";
+
+  if (kvTotal && kvTotal > 1) {
+    kvPart = `_KV${kvIndex}`;
+  }
+
+  const safeDirectoryName = sanitize(name);
+
   const screenshotsDir = path.resolve(
     process.cwd(),
     "screenshots",
-    po_number,
+    safeDirectoryName,
     TODAY
   );
 
@@ -50,7 +82,7 @@ const takeScreenshotsService = async (args: ITakeScreenshotsType) => {
 
     const page = await context.newPage();
 
-    await page.goto("https://www.poder360.com.br", {
+    await page.goto(previewLink, {
       waitUntil: "domcontentloaded",
       timeout: 60000,
     });
@@ -111,34 +143,57 @@ const takeScreenshotsService = async (args: ITakeScreenshotsType) => {
       `iframe[id^="google_ads_iframe_"][width="${width}"][height="${height}"]`
     );
 
+    if (iframes.length === 0) {
+      logger.error(
+        `[ERRO] Nenhum anúncio da campanha ${name} - Formato: ${width}x${height} foi encontrado!`
+      );
+      return;
+    }
+
     for (const iframe of iframes) {
       await iframe.scrollIntoViewIfNeeded();
       await page.waitForTimeout(6000);
     }
 
-    const filename = path.join(screenshotsDir, `${width}x${height}.png`);
+    const filename = path.join(
+      screenshotsDir,
+      `${width}x${height}${kvPart}_${typeSuffix}.png`
+    );
+
+    await page.evaluate(() => {
+      history.replaceState({}, "", location.origin + "/");
+    });
+
+    await delay(1000);
 
     await screenshot({
       filename: filename,
-    });
-
-    logger.info(
-      `[INFO] Print da campanha ${ad_name} - formato: ${width}x${height} tirado com sucesso em: ${filename}`
-    );
+    })
+      .catch((error) => {
+        logger.error(
+          `Erro ao tirar print da campanha: ${name} - formato: ${width}x${height} - Erro: ${error}`
+        );
+      })
+      .finally(() => {
+        logger.info(
+          `[INFO] Print da campanha ${name} - formato: ${width}x${height} - Cliente ${customer} - tirado com sucesso em: ${filename}`
+        );
+      });
 
     try {
       await uploadFileToDrive({
         filePath: filename,
-        poNumber: po_number,
+        campaingName: safeDirectoryName,
       });
 
       logger.info(
-        `[GoogleDrive] Upload realizado com sucesso para ${po_number}/${TODAY}`
+        `[GoogleDrive] Upload realizado com sucesso para ${safeDirectoryName}/${TODAY}`
       );
     } catch (uploadError) {
       logger.error("[GoogleDrive] Falha ao enviar screenshot", {
         filePath: filename,
-        poNumber: po_number,
+        customerName: name,
+        format: `${width}x${height}`,
         error: uploadError,
       });
     }

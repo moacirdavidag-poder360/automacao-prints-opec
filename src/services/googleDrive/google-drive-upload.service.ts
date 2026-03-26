@@ -91,12 +91,12 @@ const findOrCreateFolder = async ({
 
 export const uploadFileToDrive = async ({
   filePath,
-  poNumber,
+  campaingName,
 }: IUploadFileToDriveParams) => {
   try {
     logger.info(`[GoogleDrive] Iniciando upload`, {
       filePath,
-      poNumber,
+      campaingName,
     });
 
     if (!fs.existsSync(filePath)) {
@@ -133,7 +133,7 @@ export const uploadFileToDrive = async ({
 
     const poFolderId = await findOrCreateFolder({
       drive,
-      name: poNumber,
+      name: campaingName,
       parentId: rootFolderId,
     });
 
@@ -159,7 +159,7 @@ export const uploadFileToDrive = async ({
 
     logger.info(`[GoogleDrive] Enviando arquivo`, {
       fileName,
-      destination: `${poNumber}/${today}`,
+      destination: `${campaingName}/${today}`,
       folderId: dateFolderId,
     });
 
@@ -197,7 +197,7 @@ export const uploadFileToDrive = async ({
     console.error("ERRO BRUTO GOOGLE DRIVE:", JSON.stringify(error, null, 2));
     logger.error("[GoogleDrive] Erro no upload", {
       filePath,
-      poNumber,
+      campaingName,
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });

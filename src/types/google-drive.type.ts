@@ -10,7 +10,7 @@ export type IFindOrCreateFolderResponse = string;
 
 export interface IUploadFileToDriveParams {
   filePath: string;
-  poNumber: string;
+  campaingName: string;
 }
 
 export type IUploadFileToDriveResponse = drive_v3.Schema$File | undefined;
