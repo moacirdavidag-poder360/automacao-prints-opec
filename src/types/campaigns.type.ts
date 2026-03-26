@@ -9,16 +9,18 @@ export interface ICampaignsSheetType {
 }
 
 export interface ICampaignsObjectType {
-    customer: string;
-    name: string;
-    poNumber: string;
-    startDate: string;
-    endDate: string;
-    format: {
-        width: string;
-        height: string;
-        type: string;
-    };
-    previewLink: string;
-  }
-  
+  customer: string;
+  name: string;
+  poNumber: string;
+  startDate: string;
+  endDate: string;
+  format: {
+    width: string;
+    height: string;
+    type: string;
+  };
+  previewLink: string;
+
+  kvIndex?: number;
+  kvTotal?: number;
+}

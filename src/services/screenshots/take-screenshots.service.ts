@@ -13,8 +13,16 @@ import type { ICampaignsObjectType } from "../../types/campaigns.type.js";
 import { delay, sanitize } from "../../utils/functions.js";
 
 const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
-  const { customer, format, startDate, endDate, name, poNumber, previewLink } =
-    campaign;
+  const {
+    customer,
+    format,
+    startDate,
+    endDate,
+    name,
+    previewLink,
+    kvIndex,
+    kvTotal,
+  } = campaign;
   const { width, height, type } = format;
 
   logger.info(
@@ -26,6 +34,22 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
   );
 
   let TODAY: string = dayjs().format("DD-MM-YYYY");
+
+  let typeSuffix = "";
+
+  if (type.toLowerCase().includes("desktop")) {
+    typeSuffix = "D";
+  }
+
+  if (type.toLowerCase().includes("mobile")) {
+    typeSuffix = "M";
+  }
+
+  let kvPart = "";
+
+  if (kvTotal && kvTotal > 1) {
+    kvPart = `_KV${kvIndex}`;
+  }
 
   const safeDirectoryName = sanitize(name);
 
@@ -119,8 +143,10 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
       `iframe[id^="google_ads_iframe_"][width="${width}"][height="${height}"]`
     );
 
-    if(iframes.length === 0) {
-      logger.error(`[ERRO] Nenhum anúncio da campanha ${name} - Formato: ${width}x${height} foi encontrado!`);
+    if (iframes.length === 0) {
+      logger.error(
+        `[ERRO] Nenhum anúncio da campanha ${name} - Formato: ${width}x${height} foi encontrado!`
+      );
       return;
     }
 
@@ -129,25 +155,30 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
       await page.waitForTimeout(6000);
     }
 
-    const filename = path.join(screenshotsDir, `${width}x${height}.png`);
+    const filename = path.join(
+      screenshotsDir,
+      `${width}x${height}${kvPart}_${typeSuffix}.png`
+    );
 
-    // await page.evaluate(() => {
-    //   window.location.href = 'https://poder360.com.br'
-    // })
+    await page.evaluate(() => {
+      history.replaceState({}, "", location.origin + "/");
+    });
 
-    // await delay(1000);
+    await delay(1000);
 
     await screenshot({
       filename: filename,
-    }).catch((error) => {
-      logger.error(`Erro ao tirar print da campanha: ${name} - formato: ${width}x${height} - Erro: ${error}`)
-    }).finally(() => {
-      logger.info(
-        `[INFO] Print da campanha ${name} - formato: ${width}x${height} - Cliente ${customer} - tirado com sucesso em: ${filename}`
-      );
-    });
-
-    
+    })
+      .catch((error) => {
+        logger.error(
+          `Erro ao tirar print da campanha: ${name} - formato: ${width}x${height} - Erro: ${error}`
+        );
+      })
+      .finally(() => {
+        logger.info(
+          `[INFO] Print da campanha ${name} - formato: ${width}x${height} - Cliente ${customer} - tirado com sucesso em: ${filename}`
+        );
+      });
 
     try {
       await uploadFileToDrive({
