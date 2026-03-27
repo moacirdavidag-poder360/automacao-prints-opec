@@ -25,6 +25,7 @@
     "googleapis": "^171.4.0",
     "node-cron": "^4.2.1",
     "playwright": "^1.58.2",
+    "puppeteer": "^24.40.0",
     "screenshot-desktop": "^1.15.3",
     "winston": "^3.19.0"
   }

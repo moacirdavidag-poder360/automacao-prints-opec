@@ -5,5 +5,8 @@ declare namespace NodeJS {
     DELAY_PRINT_MS: string | number;
     GOOGLE_CHROME_PATH: string;
     GOOGLE_CHROME_PROFILE_PATH: string;
+    GOOGLE_CHROME_PROFILE_PATH_MOBILE: string;
+    GOOGLE_CHROME_EXTENSION_PATH: string;
+    EXTENSION_TOGGLE_SHORTCUT: string;
   }
 }

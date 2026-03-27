@@ -1,4 +1,4 @@
-import { chromium } from "playwright";
+import puppeteer from "puppeteer";
 import screenshot from "screenshot-desktop";
 import dayjs from "dayjs";
 import fs from "node:fs";
@@ -78,39 +78,38 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
   let browser: any = null;
 
   try {
-    const userDataPath = process.env.GOOGLE_CHROME_PROFILE_PATH;
+    const isMobile = type.toLowerCase().includes("mobile");
+
+    const userDataPath = isMobile
+      ? process.env.GOOGLE_CHROME_PROFILE_PATH_MOBILE
+      : process.env.GOOGLE_CHROME_PROFILE_PATH;
 
     if (!fs.existsSync(userDataPath)) {
       fs.mkdirSync(userDataPath, { recursive: true });
     }
 
     const executablePath = process.env.GOOGLE_CHROME_PATH as string;
+    const extensionPath = process.env.GOOGLE_CHROME_EXTENSION_PATH as string;
 
     logger.debug(`[DEBUG] Abrindo Chrome com perfil: ${userDataPath}`);
 
-    browser = await chromium.launchPersistentContext(userDataPath, {
+    browser = await puppeteer.launch({
       headless: false,
+      pipe: true,
+      userDataDir: userDataPath,
       executablePath: executablePath,
-      ignoreHTTPSErrors: true,
-      viewport: null,
+      defaultViewport: null,
+      enableExtensions: isMobile ? [extensionPath] : [],
       args: [
         "--start-maximized",
-        "--disable-sync",
-        "--disable-features=DevToolsDebuggingRestrictions",
-        "--disable-blink-features=AutomationControlled",
         "--disable-infobars",
         "--no-first-run",
         "--no-default-browser-check",
+        ...(isMobile ? [`--load-extension=${extensionPath}`] : []),
       ],
     });
 
     const page = await browser.newPage();
-
-    await page.addInitScript(() => {
-      Object.defineProperty(navigator, "webdriver", {
-        get: () => undefined,
-      });
-    });
 
     logger.debug(`[DEBUG] Página criada: ${page}`);
 
@@ -123,14 +122,35 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
 
     logger.debug(`[DEBUG] Página carregada`);
 
-    await page.waitForTimeout(6000);
+    const shortcut = process.env.EXTENSION_TOGGLE_SHORTCUT as string;
+
+    if (isMobile && shortcut) {
+      logger.debug('[DEBUG] Ativando extensão mobile para tirar prints...');
+      const keys = shortcut.split("+");
+
+      for (const key of keys.slice(0, -1)) {
+        await page.keyboard.down(key);
+      }
+
+      await page.keyboard.press(keys[keys.length - 1]);
+
+      for (const key of keys.slice(0, -1).reverse()) {
+        await page.keyboard.up(key);
+      }
+
+      logger.debug('[DEBUG] Extensão mobile ativada!');
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 6000));
 
     const pageUrl = page.url();
     const pageTitle = await page.title();
 
     logger.info(`[INFO] URL: ${pageUrl} | Título: ${pageTitle}`);
 
-    await page.waitForTimeout(4000);
+    await new Promise((resolve) => setTimeout(resolve, 4000));
 
     await page.evaluate(async () => {
       await new Promise<void>((resolve) => {
@@ -151,7 +171,7 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
       });
     });
 
-    await page.waitForTimeout(4000);
+    await new Promise((resolve) => setTimeout(resolve, 4000));
 
     await page.evaluate(() => {
       const adVideoBlock = document.querySelector(".HPR_VIDEO") as HTMLElement;
@@ -209,8 +229,8 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
     }
 
     for (const iframe of iframes) {
-      await iframe.scrollIntoViewIfNeeded();
-      await page.waitForTimeout(6000);
+      await iframe.evaluate((el: any) => el.scrollIntoView());
+      await new Promise((resolve) => setTimeout(resolve, 6000));
     }
 
     const filename = path.join(
