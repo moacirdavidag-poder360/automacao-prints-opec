@@ -1,4 +1,4 @@
-import { Builder, WebDriver } from "selenium-webdriver";
+import { Builder, WebDriver, By } from "selenium-webdriver";
 import chrome from "selenium-webdriver/chrome.js";
 import screenshot from "screenshot-desktop";
 import dayjs from "dayjs";
@@ -28,6 +28,7 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
     kvIndex,
     kvTotal,
   } = campaign;
+
   const { width, height, type } = format;
 
   logger.info(
@@ -38,6 +39,7 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
   const TODAY_DATE = dayjs();
   const startDateObject = dayjs(startDate, "DD/MM/YYYY");
   const endDateObject = dayjs(endDate, "DD/MM/YYYY");
+
   const isCampaignPeriodValid = TODAY_DATE.isBetween(
     startDateObject,
     endDateObject,
@@ -47,7 +49,7 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
 
   if (!isCampaignPeriodValid) {
     logger.warn(
-      `[WARNING] A campanha ${name} não tá em período de veiculação: ${startDate} à ${endDate} - Hoje é: ${TODAY}`
+      `[WARNING] A campanha ${name} não tá em período de veiculação: ${startDate} à ${endDate}`
     );
     return;
   }
@@ -57,8 +59,11 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
     : type.toLowerCase().includes("mobile")
     ? "M"
     : "";
+
   let kvPart = kvTotal && kvTotal > 1 ? `_KV${kvIndex}` : "";
+
   const safeDirectoryName = sanitize(name);
+
   const screenshotsDir = path.resolve(
     process.cwd(),
     "screenshots",
@@ -74,6 +79,7 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
 
   try {
     const isMobile = type.toLowerCase().includes("mobile");
+
     const userDataPath = isMobile
       ? process.env.GOOGLE_CHROME_PROFILE_PATH_MOBILE
       : process.env.GOOGLE_CHROME_PROFILE_PATH;
@@ -98,7 +104,6 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
 
     if (isMobile && extensionPath && fs.existsSync(extensionPath)) {
       options.addArguments(`--load-extension=${extensionPath}`);
-      logger.debug(`[DEBUG] Extensão carregada: ${extensionPath}`);
     }
 
     driver = await new Builder()
@@ -106,359 +111,268 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
       .setChromeOptions(options)
       .build();
 
-    const cdpConnection = await driver.createCDPConnection("page");
-
-    await cdpConnection.send("Page.addScriptToEvaluateOnNewDocument", {
-      source: `
-            (function () {
-      
-              const TARGET_WIDTH = ${width};
-              const TARGET_HEIGHT = ${height};
-      
-              const hideAds = () => {
-      
-                const divs = document.querySelectorAll('#google_image_div');
-      
-                for (let i = 0; i < divs.length; i++) {
-                  const div = divs[i];
-                  const img = div.querySelector('img');
-      
-                  if (img) {
-                    const w = img.getAttribute('width');
-                    const h = img.getAttribute('height');
-      
-                    if (w !== String(TARGET_WIDTH) || h !== String(TARGET_HEIGHT)) {
-                      div.style.cssText = 'display:none !important; visibility:hidden !important; height:0;width:0;overflow:hidden;';
-                    }
-                  }
-                }
-      
-                const iframes = document.querySelectorAll('iframe[id^="google_ads_iframe_"]');
-      
-                for (let i = 0; i < iframes.length; i++) {
-                  const iframe = iframes[i];
-                  const w = iframe.getAttribute('width');
-                  const h = iframe.getAttribute('height');
-      
-                  if (w !== String(TARGET_WIDTH) || h !== String(TARGET_HEIGHT)) {
-                    iframe.style.display = 'none';
-      
-                    let parent = iframe.parentElement;
-                    let depth = 0;
-      
-                    while (parent && depth < 3) {
-                      parent.style.display = 'none';
-                      parent = parent.parentElement;
-                      depth++;
-                    }
-                  }
-                }
-      
-              };
-      
-              const start = () => {
-                hideAds();
-
-                const observer = new MutationObserver(hideAds);
-                observer.observe(document.documentElement, {
-                  childList: true,
-                  subtree: true
-                });
-
-                setInterval(hideAds, 300);
-              };
-
-              start();
-      
-            })();
-          `,
-    });
-
-    logger.debug(`[DEBUG] Navegando para: ${previewLink}`);
     await driver.get(previewLink);
 
-    await driver.executeScript(
-      `(width, height) => {
-    
-        const hideAds = () => {
-    
-          document.querySelectorAll('[id^="google_"], [class*="google"], iframe').forEach((el) => {
-    
-            const w = el.getAttribute?.('width');
-            const h = el.getAttribute?.('height');
-    
-            if (w && h) {
-              if (w !== String(width) || h !== String(height)) {
-                el.style.display = 'none';
-                el.style.visibility = 'hidden';
-              }
-            } else {
-              if (el.id?.includes('google') || el.className?.toString().includes('google')) {
-                el.style.display = 'none';
-              }
-            }
-    
-          });
-    
-        };
-    
-        hideAds();
-    
-      }`,
-      width,
-      height
-    );
-
-    await delay(3000);
+    await driver.wait(async () => {
+      const readyState = await driver!.executeScript(
+        "return document.readyState"
+      );
+      return readyState === "interactive" || readyState === "complete";
+    }, 10000);
 
     if (isMobile) {
-      logger.debug(
-        "[DEBUG] Ativando extensão do simulador móvel via RobotJS..."
-      );
       await delay(1000);
 
-      try {
-        const windowHandle = await driver.getWindowHandle();
-        await driver.switchTo().window(windowHandle);
-        await delay(800);
+      const windowHandle = await driver.getWindowHandle();
+      await driver.switchTo().window(windowHandle);
+      await delay(800);
 
-        robot.moveMouse(500, 500);
-        robot.mouseClick();
-        await delay(1000);
+      robot.moveMouse(500, 500);
+      robot.mouseClick();
+      await delay(1000);
 
-        robot.keyToggle("control", "down");
-        robot.keyToggle("shift", "down");
-        robot.keyToggle("m", "down");
+      robot.keyToggle("control", "down");
+      robot.keyToggle("shift", "down");
+      robot.keyToggle("m", "down");
 
-        await delay(500);
+      await delay(500);
 
-        robot.keyToggle("control", "up");
-        robot.keyToggle("shift", "up");
-        robot.keyToggle("m", "up");
-
-        logger.info("[INFO] Atalho CTRL+SHIFT+M enviado via RobotJS!");
-        await delay(4000);
-
-        logger.debug("[DEBUG] Recarregando página com extensão ativa...");
-        await driver.navigate().refresh();
-        await delay(6000);
-
-        const isDevToolsActive = await driver.executeScript(`
-          return window.innerWidth !== window.screen.availWidth ||
-                 window.innerHeight !== window.screen.availHeight;
-        `);
-
-        if (isDevToolsActive) {
-          logger.info(
-            "[INFO] Extensão de simulador móvel ativada com sucesso!"
-          );
-        } else {
-          logger.warn("[WARNING] Extensão pode não estar ativada corretamente");
-        }
-      } catch (err) {
-        logger.error(`[ERRO] Falha ao ativar extensão: ${err}`);
-      }
-    }
-
-    const pageUrl = await driver.getCurrentUrl();
-    const pageTitle = await driver.getTitle();
-    logger.info(`[INFO] URL: ${pageUrl} | Título: ${pageTitle}`);
-
-    await delay(2000);
-
-    await driver.executeScript(`
-      const adVideoBlock = document.querySelector('.HPR_VIDEO');
-      if (adVideoBlock) adVideoBlock.style.display = 'none';
-    `);
-
-    let iframeElements = await driver.findElements({
-      css: `iframe[id^="google_ads_iframe_"][width="${width}"][height="${height}"]`,
-    });
-
-    if (iframeElements.length === 0) {
-      logger.info(
-        `[INFO] Nenhum anúncio encontrado na viewport. Fazendo scroll para encontrar ${width}x${height}...`
-      );
-
-      const found = await driver.executeScript(`
-        return new Promise((resolve) => {
-          let total = 0;
-          const distance = 500;
-          const targetWidth = ${width};
-          const targetHeight = ${height};
-
-          const timer = setInterval(() => {
-            const iframes = document.querySelectorAll(
-              'iframe[id^="google_ads_iframe_"][width="' + targetWidth + '"][height="' + targetHeight + '"]'
-            );
-
-            if (iframes.length > 0) {
-              clearInterval(timer);
-              resolve(true);
-              return;
-            }
-
-            window.scrollBy(0, distance);
-            total += distance;
-
-            if (total >= document.body.scrollHeight) {
-              clearInterval(timer);
-              resolve(false);
-            }
-          }, 300);
-        });
-      `);
+      robot.keyToggle("control", "up");
+      robot.keyToggle("shift", "up");
+      robot.keyToggle("m", "up");
 
       await delay(2000);
 
-      if (!found) {
-        logger.error(
-          `[ERRO] Nenhum anúncio da campanha ${name} - Formato: ${width}x${height} foi encontrado após scroll completo!`
-        );
-        return;
-      }
-
-      iframeElements = await driver.findElements({
-        css: `iframe[id^="google_ads_iframe_"][width="${width}"][height="${height}"]`,
-      });
+      await delay(3000);
     }
 
-    if (iframeElements.length === 0) {
+    await delay(3000);
+
+    logger.info(
+      `[INFO] Iniciando scroll inteligente para encontrar anúncio ${width}x${height}...`
+    );
+
+    const targetAdFound = await driver.executeScript(`
+      return new Promise((resolve) => {
+        const targetWidth = ${width};
+        const targetHeight = ${height};
+        let scrollAttempts = 0;
+        const maxAttempts = 50;
+        const distance = 400;
+    
+        const getSize = (el) => {
+          let w = el.getAttribute('width');
+          let h = el.getAttribute('height');
+    
+          if (!w || !h) {
+            w = el.offsetWidth;
+            h = el.offsetHeight;
+          }
+    
+          if (!w || !h || w == 0 || h == 0) {
+            const rect = el.getBoundingClientRect();
+            w = rect.width;
+            h = rect.height;
+          }
+    
+          return {
+            w: Math.round(Number(w)),
+            h: Math.round(Number(h))
+          };
+        };
+    
+        const findTargetAd = () => {
+          const elements = [
+            ...document.querySelectorAll('iframe[id^="google_ads_iframe_"]'),
+            ...document.querySelectorAll('.img_ad'),
+            ...document.querySelectorAll('#google_image_div'),
+            ...document.querySelectorAll('a[href*="googleads"]')
+          ];
+    
+          for (const el of elements) {
+            const { w, h } = getSize(el);
+    
+            if (w === targetWidth && h === targetHeight) {
+              return true;
+            }
+          }
+    
+          return false;
+        };
+    
+        const scrollAndCheck = () => {
+          if (findTargetAd()) {
+            resolve(true);
+            return;
+          }
+    
+          scrollAttempts++;
+    
+          if (scrollAttempts >= maxAttempts) {
+            resolve(false);
+            return;
+          }
+    
+          window.scrollBy(0, distance);
+          setTimeout(scrollAndCheck, 500);
+        };
+    
+        scrollAndCheck();
+      });
+    `);
+
+    if (!targetAdFound) {
       logger.error(
-        `[ERRO] Nenhum anúncio da campanha ${name} - Formato: ${width}x${height} foi encontrado!`
+        `[ERRO] Anúncio ${width}x${height} não encontrado após scroll inteligente`
       );
       return;
     }
 
-    logger.info(
-      `[INFO] Anúncio encontrado! Centralizando e capturando ${width}x${height}...`
+    logger.info(`[INFO] Anúncio ${width}x${height} encontrado na página!`);
+
+    await delay(1500);
+
+    let iframeElements = await driver.findElements(
+      By.css(`iframe[id*="google_ads_iframe_"]`)
     );
 
-    for (const iframe of iframeElements) {
-      await driver.executeScript(
-        "arguments[0].scrollIntoView({ behavior: 'auto', block: 'center' });",
-        iframe
+    const imgElements = await driver.findElements(
+      By.css(
+        `img[src*="googlesyndication.com"], .img_ad, #google_image_div, a[href*="googleads"]`
+      )
+    );
+
+    const googleDivElements = await driver.findElements(
+      By.css(`#google_image_div`)
+    );
+
+    const allElements = [
+      ...iframeElements,
+      ...imgElements,
+      ...googleDivElements,
+    ];
+
+    logger.info(
+      `[INFO] ${iframeElements.length} iframe(s) + ${imgElements.length} imagem(ns) = ${allElements.length} elemento(s) total`
+    );
+
+    let targetIframe = null;
+
+    for (let i = 0; i < allElements.length; i++) {
+      const element = allElements[i];
+
+      try {
+        let w = await element!.getAttribute("width");
+        let h = await element!.getAttribute("height");
+
+        if (!w || !h || w === "0" || h === "0") {
+          const rect = await element!.getRect();
+          w = String(Math.round(rect.width));
+          h = String(Math.round(rect.height));
+        }
+
+        if (!w || !h) {
+          const rect = await element!.getRect();
+          w = String(rect.width);
+          h = String(rect.height);
+        }
+
+        logger.info(
+          `[INFO] Elemento ${i}: ${w}x${h} (alvo: ${width}x${height})`
+        );
+
+        if (String(w) === String(width) && String(h) === String(height)) {
+          targetIframe = element;
+          logger.info(`[INFO] Anúncio alvo encontrado no índice ${i}`);
+          break;
+        }
+      } catch (err) {
+        logger.warn(
+          `[WARNING] Erro ao verificar elemento ${i}: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        );
+      }
+    }
+
+    if (!targetIframe) {
+      logger.error(
+        `[ERRO] Nenhum anúncio ${width}x${height} encontrado entre os ${allElements.length} elementos`
       );
-      await delay(1500);
+      return;
     }
 
     await driver.executeScript(
-      `(width, height) => {
-        document.querySelectorAll('div[style*="position:absolute"][style*="overflow:hidden"]').forEach((el) => {
-          const attrs = el.attributes;
-          let isAd = false;
-
-          for (let attr of attrs) {
-            if (attr.name.includes('google') || attr.value.includes('google')) {
-              isAd = true;
-              break;
-            }
-          }
-
-          if (isAd) {
-            const iframe = el.querySelector('iframe');
-            const w = iframe?.getAttribute('width');
-            const h = iframe?.getAttribute('height');
-
-            if (w !== String(width) || h !== String(height)) {
-              el.style.display = 'none';
-              el.style.visibility = 'hidden';
-              el.style.height = '0';
-              el.style.width = '0';
-              el.style.overflow = 'hidden';
-            }
-          }
-        });
-
-        const iframes = document.querySelectorAll('iframe[id^="google_ads_iframe_"]');
-
-        iframes.forEach((iframe) => {
-          const w = iframe.getAttribute('width');
-          const h = iframe.getAttribute('height');
-
-          if (w !== String(width) || h !== String(height)) {
-            iframe.style.display = 'none';
-            iframe.style.visibility = 'hidden';
-
-            const parent1 = iframe.parentElement;
-            if (parent1) {
-              parent1.style.display = 'none';
-              parent1.style.visibility = 'hidden';
-              parent1.style.height = '0';
-              parent1.style.width = '0';
-              parent1.style.overflow = 'hidden';
-            }
-
-            const parent2 = parent1?.parentElement;
-            if (parent2) {
-              parent2.style.display = 'none';
-              parent2.style.visibility = 'hidden';
-              parent2.style.height = '0';
-              parent2.style.width = '0';
-              parent2.style.overflow = 'hidden';
-            }
-
-            const parent3 = parent2?.parentElement;
-            if (parent3) {
-              parent3.style.display = 'none';
-              parent3.style.visibility = 'hidden';
-              parent3.style.height = '0';
-              parent3.style.width = '0';
-              parent3.style.overflow = 'hidden';
-            }
-          }
-        });
-
-        document.querySelectorAll('[id^="google_image_div"]').forEach((div) => {
-          div.style.display = 'none';
-          div.style.visibility = 'hidden';
-          div.style.height = '0';
-          div.style.width = '0';
-          div.style.overflow = 'hidden';
-
-          const parent1 = div.parentElement;
-          if (parent1) {
-            parent1.style.display = 'none';
-            parent1.style.visibility = 'hidden';
-            parent1.style.height = '0';
-            parent1.style.width = '0';
-            parent1.style.overflow = 'hidden';
-          }
-
-          const parent2 = parent1?.parentElement;
-          if (parent2) {
-            parent2.style.display = 'none';
-            parent2.style.visibility = 'hidden';
-            parent2.style.height = '0';
-            parent2.style.width = '0';
-            parent2.style.overflow = 'hidden';
-          }
-
-          const parent3 = parent2?.parentElement;
-          if (parent3) {
-            parent3.style.display = 'none';
-            parent3.style.visibility = 'hidden';
-            parent3.style.height = '0';
-            parent3.style.width = '0';
-            parent3.style.overflow = 'hidden';
-          }
-        });
-
-        if (!(width === 970 && height === 90)) {
-          const bannerFooter = document.getElementById("google_image_div");
-          if (bannerFooter) bannerFooter.style.display = "none";
-          const footerBanner = document.querySelector('.box-banner-footer-desktop');
-          if (footerBanner) {
-            footerBanner.style.display = 'none';
-            footerBanner.style.visibility = 'hidden';
-          }
-        }
-      }`,
-      width,
-      height
+      "arguments[0].scrollIntoView({ block: 'center' });",
+      targetIframe
     );
 
+    logger.info(`[INFO] Anúncio alvo centralizado na tela`);
+
     await delay(2000);
+
+    await driver.executeScript(
+      `(target) => {
+        const hideEl = (el) => {
+          if (!el) return;
+          el.style.setProperty('display', 'none', 'important');
+          el.style.setProperty('visibility', 'hidden', 'important');
+          el.style.setProperty('opacity', '0', 'important');
+          el.style.setProperty('height', '0px', 'important');
+          el.style.setProperty('width', '0px', 'important');
+          el.style.setProperty('overflow', 'hidden', 'important');
+          el.style.setProperty('pointer-events', 'none', 'important');
+          el.style.setProperty('position', 'absolute', 'important');
+          el.style.setProperty('z-index', '-9999', 'important');
+        };
+    
+        const mark = (el) => {
+          if (!el) return;
+          el.setAttribute('data-target-ad', 'true');
+        };
+    
+        mark(target);
+    
+        let parent = target.parentElement;
+        while (parent) {
+          mark(parent);
+          parent = parent.parentElement;
+        }
+    
+        const allAdNodes = document.querySelectorAll(
+          [
+            'div[id^="google_ads_iframe_"]',
+            'div[id*="google_ads_iframe_"][id*="container"]',
+            'iframe[id^="google_ads_iframe_"]',
+            '#google_image_div',
+            '.img_ad',
+            'a[href*="googleads"]'
+          ].join(',')
+        );
+    
+        allAdNodes.forEach((el) => {
+          if (!el.closest('[data-target-ad="true"]')) {
+            hideEl(el);
+          }
+        });
+    
+        document.querySelectorAll('#google_image_div').forEach((div) => {
+          if (!div.closest('[data-target-ad="true"]')) {
+            hideEl(div);
+            let parent = div.parentElement;
+            let depth = 0;
+            while (parent && depth < 3) {
+              hideEl(parent);
+              parent = parent.parentElement;
+              depth++;
+            }
+          }
+        });
+      }`,
+      targetIframe
+    );
+
+    logger.info(`[INFO] Outros anúncios ocultados`);
 
     await driver.executeScript(`
       history.replaceState({}, "", location.origin + "/");
@@ -471,36 +385,19 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
       `${width}x${height}${kvPart}_${typeSuffix}.png`
     );
 
-    await screenshot({ filename })
-      .catch((error) => {
-        logger.error(
-          `[ERRO] Falha ao tirar print: ${name} - ${width}x${height} - ${error}`
-        );
-      })
-      .finally(() => {
-        logger.info(`[INFO] Print tirado com sucesso: ${filename}`);
-      });
+    await screenshot({ filename });
 
-    try {
-      await uploadFileToDrive({
-        filePath: filename,
-        campaingName: safeDirectoryName,
-      });
+    logger.info(`[INFO] Print tirado: ${filename}`);
 
-      logger.info(
-        `[INFO] Upload para Google Drive realizado: ${safeDirectoryName}/${TODAY}`
-      );
-    } catch (uploadError) {
-      logger.error("[ERRO] Falha ao fazer upload para Google Drive", {
-        file: filename,
-        error: uploadError,
-      });
-    }
+    await uploadFileToDrive({
+      filePath: filename,
+      campaingName: safeDirectoryName,
+    });
+
+    logger.info(`[INFO] Print enviado para o Google Drive`);
   } catch (error) {
     logger.error(
-      `[ERRO] Falha no serviço de screenshots: ${
-        error instanceof Error ? error.message : String(error)
-      }`
+      `[ERRO] ${error instanceof Error ? error.message : String(error)}`
     );
   } finally {
     if (driver) await driver.quit();

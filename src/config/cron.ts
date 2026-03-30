@@ -82,11 +82,17 @@ const normalizeCampaigns = (
 };
 
 const setupCronPrints = () => {
+  let isRunning = false;
   cron.schedule("0 */1 * * * *", async () => {
     try {
+      if (isRunning) {
+        logger.warn("Execução anterior ainda em andamento, pulando...");
+        return;
+      }
       logger.info(
         "Serviço do cron que vai tirar prints do Poder360 no futuro iniciado e rodando! :D"
       );
+      isRunning = true;
       const campaigns = await readCampaignSheetService();
       const normalizedCampaigns = normalizeCampaigns(campaigns);
 
@@ -100,7 +106,9 @@ const setupCronPrints = () => {
         );
       } else {
         logger.error("Erro ao iniciar o cron de tirar prints:", error);
-      }
+      } 
+    } finally {
+      isRunning = false;
     }
   });
 };
