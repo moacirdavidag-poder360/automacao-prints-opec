@@ -6,6 +6,11 @@ import fs from "node:fs";
 import path from "node:path";
 import logger from "../../config/logger.config.js";
 
+import customParseFormat from "dayjs/plugin/customParseFormat.js";
+import isBetween from "dayjs/plugin/isBetween.js";
+dayjs.extend(customParseFormat);
+dayjs.extend(isBetween);
+
 import { uploadFileToDrive } from "../googleDrive/google-drive-upload.service.js";
 
 import type { ICampaignsObjectType } from "../../types/campaigns.type.js";
@@ -29,11 +34,28 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
     `[INFO] Iniciando o tirar prints da campanha ${name} - ${width}x${height} - ${type} - Cliente ${customer}...`
   );
 
+  const TODAY = dayjs().format("DD-MM-YYYY");
+  const TODAY_DATE = dayjs();
+  const startDateObject = dayjs(startDate, "DD/MM/YYYY");
+  const endDateObject = dayjs(endDate, "DD/MM/YYYY");
+
+  const isCampaignPeriodValid = TODAY_DATE.isBetween(
+    startDateObject,
+    endDateObject,
+    "day",
+    "[]"
+  );
+
+  if (!isCampaignPeriodValid) {
+    logger.warn(
+      `[WARNING] A campanha ${name} não tá em período de veiculação: ${startDate} à ${endDate}`
+    );
+    return;
+  }
+
   logger.debug(
     `[DEBUG] Iniciando o serviço de tirar prints para o tamanho ${width}x${height}`
   );
-
-  let TODAY: string = dayjs().format("DD-MM-YYYY");
 
   let typeSuffix = "";
 
@@ -159,6 +181,10 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
       screenshotsDir,
       `${width}x${height}${kvPart}_${typeSuffix}.png`
     );
+
+    await page.evaluate(() => {
+      history.replaceState({}, "", location.origin + "/");
+    });
 
     await page.evaluate(() => {
       history.replaceState({}, "", location.origin + "/");

@@ -32,3 +32,16 @@ export const getKvSuffix = (
 
   return `_KV${sameFiles.length + 1}`;
 };
+
+export function mapRowToObject<T extends Record<string, any>>(
+  headers: string[],
+  row: string[]
+): T {
+  const obj = {} as T;
+
+  headers.forEach((header, index) => {
+    obj[header as keyof T] = (row[index] ?? "") as any;
+  });
+
+  return obj;
+}

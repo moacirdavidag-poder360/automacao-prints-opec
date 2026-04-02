@@ -37,6 +37,8 @@ const findOrCreateFolder = async ({
     const res = await drive.files.list({
       q: query,
       fields: "files(id, name)",
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
     });
 
     const files = res.data.files ?? [];
@@ -67,6 +69,7 @@ const findOrCreateFolder = async ({
         parents: parentId ? [parentId] : null,
       },
       fields: "id",
+      supportsAllDrives: true,
     });
 
     if (!folderCreated.data.id) {
@@ -157,18 +160,52 @@ export const uploadFileToDrive = async ({
 
     const fileName = path.basename(filePath);
 
-    logger.info(`[GoogleDrive] Enviando arquivo`, {
+    logger.info(`[GoogleDrive] Preparando upload`, {
       fileName,
       destination: `${campaingName}/${today}`,
       folderId: dateFolderId,
     });
 
-    const stream = fs.createReadStream(filePath);
+    const existingFileRes = await drive.files.list({
+      q: [
+        `name='${fileName}'`,
+        `'${dateFolderId}' in parents`,
+        `trashed=false`,
+      ].join(" and "),
+      fields: "files(id, name)",
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    });
 
-    stream.on("error", (err) => {
-      logger.error("[GoogleDrive] Erro no stream do arquivo", {
-        error: err.message,
+    const existingFile = existingFileRes.data.files?.[0];
+
+    const createStream = () => fs.createReadStream(filePath);
+
+    if (existingFile?.id) {
+      logger.info(`[GoogleDrive] Arquivo encontrado, sobrescrevendo`, {
+        fileId: existingFile.id,
+        fileName,
       });
+
+      const response = await drive.files.update({
+        fileId: existingFile.id,
+        media: {
+          mimeType: "image/png",
+          body: createStream(),
+        },
+        supportsAllDrives: true,
+      });
+
+      logger.info(`[GoogleDrive] Upload sobrescrito com sucesso`, {
+        fileName,
+        fileId: existingFile.id,
+      });
+
+      return response.data;
+    }
+
+    logger.info(`[GoogleDrive] Arquivo não encontrado, criando novo`, {
+      fileName,
     });
 
     const response = await drive.files.create({
@@ -178,13 +215,10 @@ export const uploadFileToDrive = async ({
       },
       media: {
         mimeType: "image/png",
-        body: stream,
+        body: createStream(),
       },
       fields: "id",
-    });
-
-    logger.debug(`[GoogleDrive] Resposta upload`, {
-      data: response.data,
+      supportsAllDrives: true,
     });
 
     logger.info(`[GoogleDrive] Upload concluído`, {
