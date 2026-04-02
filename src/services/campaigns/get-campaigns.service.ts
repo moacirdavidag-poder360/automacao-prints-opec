@@ -1,6 +1,8 @@
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat.js";
 import isBetween from "dayjs/plugin/isBetween.js";
+import utc from "dayjs/plugin/utc.js";
+dayjs.extend(utc);
 
 import logger from "../../config/logger.config.js";
 import { normalizeCampaigns } from "../../utils/functions.js";
@@ -15,30 +17,27 @@ const getCampaignsService = async (): Promise<ICampaignsObjectType[]> => {
   try {
     logger.info("[Campaigns] Iniciando busca de campanhas");
 
-    const TODAY_DATE = dayjs();
+    const startDateObject = dayjs().utc().startOf("month").toDate();
+    const endDateObject = dayjs().utc().endOf("month").toDate();
 
-    const startDateObject = TODAY_DATE.startOf("month");
-    const endDateObject = TODAY_DATE.endOf("month");
-
-    logger.debug("[Campaigns] Período definido", {
-      data_inicio: startDateObject.toDate(),
-      data_fim: endDateObject.toDate(),
-    });
+    logger.debug(
+      `[Campaigns] Período definido: ${startDateObject} à ${endDateObject}`
+    );
 
     const campaigns = await readCampaignsRepository({
-      data_inicio: startDateObject.toDate(),
-      data_fim: endDateObject.toDate(),
+      data_inicio: startDateObject,
+      data_fim: endDateObject,
     });
 
-    logger.info("[Campaigns] Campanhas recebidas do repository", {
-      total: campaigns.length,
-    });
+    logger.info(
+      `[Campaigns] Campanhas recebidas do repository: ${campaigns.length}`
+    );
 
     const normalizedCampaigns = normalizeCampaigns(campaigns);
 
-    logger.info("[Campaigns] Campanhas normalizadas", {
-      total: normalizedCampaigns.length,
-    });
+    logger.info(
+      `[Campaigns] Campanhas normalizadas: ${normalizedCampaigns.length}`
+    );
 
     return normalizedCampaigns;
   } catch (error) {

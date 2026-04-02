@@ -85,15 +85,13 @@ const normalizeCampaigns = (
 };
 
 const setupCronPrints = () => {
-  cron.schedule("0 */1 * * * *", async () => {
+  cron.schedule("* */1 * * * *", async () => {
     try {
       logger.info("[CRON] Iniciando fluxo completo de campanhas");
 
       const campaignsFromDB = await getCampaignsService();
 
-      logger.info("[CRON] Campanhas vindas do banco", {
-        total: campaignsFromDB.length,
-      });
+      logger.info(`[CRON] Campanhas vindas do banco: ${campaignsFromDB.length}`);
 
       await writeCampaignsService(campaignsFromDB);
 

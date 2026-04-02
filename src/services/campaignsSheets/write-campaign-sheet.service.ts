@@ -1,20 +1,9 @@
 import { google } from "googleapis";
+import util from "util";
 import logger from "../../config/logger.config.js";
 import { getGoogleAuth } from "../googleDrive/google-drive-auth.service.js";
 
-import type { ICampaignsObjectType } from "../../types/campaigns.type.js";
-import { normalizeCampaigns } from "../../utils/functions.js";
-
-const SHEET_NAME = "Página 1";
-
-const buildRow = (c: ICampaignsObjectType): string[] => [
-  c.customer ?? "",
-  c.name ?? "",
-  c.poNumber ?? "",
-  c.startDate ?? "",
-  c.endDate ?? "",
-  `${c.format.width}x${c.format.height} - ${c.format.type}`,
-];
+const SHEET_NAME = process.env.NOME_ABA_PLANILHA;
 
 const writeCampaignsService = async (rawCampaigns: any[]) => {
   try {
@@ -24,12 +13,9 @@ const writeCampaignsService = async (rawCampaigns: any[]) => {
     const sheets = google.sheets({ version: "v4", auth });
 
     const spreadsheetId = process.env.PLANILHA_CAMPANHAS_ID as string;
+    if (!spreadsheetId) throw new Error("PLANILHA_CAMPANHAS_ID não definido");
 
-    if (!spreadsheetId) {
-      throw new Error("PLANILHA_CAMPANHAS_ID não definido");
-    }
-
-    const normalized = normalizeCampaigns(rawCampaigns);
+    const normalized = rawCampaigns;
 
     logger.debug("[GoogleSheets] Campanhas normalizadas", {
       total: normalized.length,
@@ -37,99 +23,132 @@ const writeCampaignsService = async (rawCampaigns: any[]) => {
 
     const getRes = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `${SHEET_NAME}!A1:Z1000`,
+      range: `${SHEET_NAME}!A1:I1000`,
     });
 
-    const rows = (getRes.data.values ?? []).filter((row): row is string[] =>
+    const rows = (getRes.data.values || []).filter((row): row is string[] =>
       Array.isArray(row)
     );
 
-    if (!rows.length) {
-      const newRows: string[][] = normalized.map(buildRow);
+    if (rows.length <= 1) {
+      logger.info("[GoogleSheets] Planilha vazia detectada");
+
+      const newRows = normalized
+        .map((c) => [
+          c.row[0],
+          c.row[1],
+          c.row[2],
+          c.row[3],
+          c.row[4],
+          c.row[5],
+          "",
+          c.orderId,
+          c.creativeId,
+        ])
+        .filter(
+          (r): r is string[] =>
+            Array.isArray(r) && r.every((cell) => typeof cell === "string")
+        );
+
+      if (!newRows.length) {
+        logger.warn("[GoogleSheets] Nenhuma linha válida para inserir");
+        return;
+      }
+
+      logger.info("[GoogleSheets] Inserindo dados", {
+        totalLinhas: newRows.length,
+      });
 
       await sheets.spreadsheets.values.update({
         spreadsheetId,
         range: `${SHEET_NAME}!A2`,
         valueInputOption: "RAW",
-        requestBody: {
-          values: newRows,
-        },
+        requestBody: { values: newRows },
       });
 
-      logger.info("[GoogleSheets] Planilha criada do zero", {
+      logger.info("[GoogleSheets] Dados inseridos com sucesso", {
         totalLinhas: newRows.length,
       });
 
       return;
     }
 
-    const headers = rows[0] as string[];
     const data = rows.slice(1);
+    const existingKeys = new Set(
+      data.map((row) => `${row[7]}|${row[8]}`)
+    );
 
-    let finalRows: string[][] = [...data].filter(Boolean);
-
-    const groupedIncoming = normalized.reduce((acc, c) => {
-        const customer = c.customer ?? "UNKNOWN";
-      
-        if (!acc[customer]) acc[customer] = [];
-        acc[customer].push(c);
-      
-        return acc;
-      }, {} as Record<string, ICampaignsObjectType[]>);
-
-    Object.entries(groupedIncoming).forEach(([customer, campaigns]) => {
-      const existingIndexes = finalRows
-        .map((row, index) => ({ row, index }))
-        .filter(({ row }) => row?.[0] === customer);
-
-      if (!existingIndexes.length) {
-        logger.info("[GoogleSheets] Novo cliente inserido", { customer });
-
-        finalRows = [...finalRows, ...campaigns.map(buildRow)];
-        return;
-      }
-
-      const lastIndex = existingIndexes[existingIndexes.length - 1]?.index ?? 0;
-
-      const existingFormats = new Set(
-        existingIndexes.map(({ row }) => row?.[5]).filter(Boolean)
-      );
-
-      const newRows = campaigns
-        .map(buildRow)
-        .filter((row) => !existingFormats.has(row[5]));
-
-      if (!newRows.length) {
-        logger.debug("[GoogleSheets] Nenhum novo formato", { customer });
-        return;
-      }
-
-      logger.info("[GoogleSheets] Inserindo novos formatos no bloco", {
-        customer,
-        quantidade: newRows.length,
-      });
-
-      finalRows.splice(lastIndex + 1, 0, ...newRows);
+    logger.debug("[GoogleSheets] Chaves existentes", {
+      quantidade: existingKeys.size,
     });
 
-    const updateValues: string[][] = [headers, ...finalRows];
+    const newRows = normalized
+      .filter((c) => {
+        const key = `${c.orderId}|${c.creativeId}`;
+        const isDuplicate = existingKeys.has(key);
+
+        if (isDuplicate) {
+          logger.debug("[GoogleSheets] Campanha duplicada", {
+            orderId: c.orderId,
+            creativeId: c.creativeId,
+          });
+        }
+
+        return !isDuplicate;
+      })
+      .map((c) => [
+        c.row[0],
+        c.row[1],
+        c.row[2],
+        c.row[3],
+        c.row[4],
+        c.row[5],
+        "",
+        c.orderId,
+        c.creativeId,
+      ])
+      .filter(
+        (r): r is string[] =>
+          Array.isArray(r) && r.every((cell) => typeof cell === "string")
+      );
+
+    if (!newRows.length) {
+      logger.info("[GoogleSheets] Nenhuma nova campanha para inserir", {
+        normalizadas: normalized.length,
+        existentes: data.length,
+      });
+      return;
+    }
+
+    const appendStartRow = data.length + 2;
+
+    logger.info("[GoogleSheets] Inserindo novas linhas", {
+      quantidade: newRows.length,
+      startRow: appendStartRow,
+    });
 
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `${SHEET_NAME}!A1`,
+      range: `${SHEET_NAME}!A${appendStartRow}`,
       valueInputOption: "RAW",
-      requestBody: {
-        values: updateValues,
-      },
+      requestBody: { values: newRows },
     });
 
-    logger.info("[GoogleSheets] Planilha atualizada com sucesso", {
-      totalLinhas: finalRows.length,
+    logger.info("[GoogleSheets] Novas campanhas adicionadas com sucesso", {
+      totalNovas: newRows.length,
+      linhasAtuais: data.length + newRows.length,
     });
-  } catch (error) {
+  } catch (error: any) {
+    const errorMessage = error?.message || String(error);
+    const errorStack = error?.stack || "";
+    const errorResponse = error?.response
+      ? JSON.stringify(error.response.data || error.response, null, 2)
+      : undefined;
+
     logger.error("[GoogleSheets] Erro ao escrever campanhas", {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
+      message: errorMessage,
+      stack: errorStack,
+      response: errorResponse,
     });
 
     throw error;

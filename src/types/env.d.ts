@@ -5,5 +5,6 @@ declare namespace NodeJS {
     PLANILHA_CAMPANHAS_ID: string;
     MONGO_URI: string;
     MONGO_DB_NAME: string;
+    NOME_ABA_PLANILHA: string;
   }
 }
