@@ -37,6 +37,8 @@ const findOrCreateFolder = async ({
     const res = await drive.files.list({
       q: query,
       fields: "files(id, name)",
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
     });
 
     const files = res.data.files ?? [];
@@ -67,6 +69,7 @@ const findOrCreateFolder = async ({
         parents: parentId ? [parentId] : null,
       },
       fields: "id",
+      supportsAllDrives: true,
     });
 
     if (!folderCreated.data.id) {
@@ -181,6 +184,7 @@ export const uploadFileToDrive = async ({
         body: stream,
       },
       fields: "id",
+      supportsAllDrives: true,
     });
 
     logger.debug(`[GoogleDrive] Resposta upload`, {
