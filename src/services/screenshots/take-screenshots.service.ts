@@ -53,6 +53,16 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
     return;
   }
 
+  if (!width || height) {
+    logger.error(`[ERROR] A campanha ${name} - não tem largura ou altura definida! Preencha na planilha!`);
+    return;
+  }
+
+  if (!previewLink) {
+    logger.error(`[ERROR] A campanha ${name} - largura: ${width} - altura: ${height} - não tem link de preview! Preencha na planilha!`);
+    return;
+  }
+
   logger.debug(
     `[DEBUG] Iniciando o serviço de tirar prints para o tamanho ${width}x${height}`
   );

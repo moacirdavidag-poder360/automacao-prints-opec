@@ -8,12 +8,13 @@ import type {
 import { mapRowToObject } from "../../utils/functions.js";
 
 const readCampaignSheetService = async (): Promise<ICampaignsObjectType[]> => {
+  const SHEET_NAME = process.env.NOME_ABA_PLANILHA;
   const auth = getGoogleAuth();
 
   const sheets = google.sheets({ version: "v4", auth });
 
   const spreadsheetId = process.env.PLANILHA_CAMPANHAS_ID;
-  const range = "Página 1!A1:Z1000";
+  const range = `${SHEET_NAME}!A1:Z1000`;
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,

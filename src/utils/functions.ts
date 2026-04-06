@@ -45,3 +45,108 @@ export function mapRowToObject<T extends Record<string, any>>(
 
   return obj;
 }
+
+export const formatDate = (date: string) => {
+  if (!date) return "";
+
+  const [day, month, year] = date.split("/");
+  return `${day?.padStart(2, "0") ?? ""}/${month?.padStart(2, "0") ?? ""}/${
+    year ?? ""
+  }`;
+};
+
+export const normalizeCampaigns = (campaigns: any[]) => {
+  const result: any[] = [];
+
+  console.log("[normalizeCampaigns] Recebeu", campaigns.length, "campanhas");
+
+  campaigns.forEach((campaign, idx) => {
+    console.log(`[normalizeCampaigns] Campanha ${idx}:`, {
+      temItensLinha: !!campaign.itens_linha,
+      lengthItensLinha: campaign.itens_linha?.length ?? "undefined",
+      nome_agencia: campaign.nome_agencia,
+    });
+
+    const orderId = String(
+      campaign.order_id?.$numberLong ?? campaign.order_id ?? ""
+    );
+    const customer = campaign.nome_agencia ?? "";
+    const nameOrder = campaign.order_nome ?? "";
+    const startDate = formatDate(campaign.data_inicio_str ?? "");
+    const endDate = formatDate(campaign.data_fim_str ?? "");
+    const poNumber = campaign.poNumber ?? "";
+
+    campaign.itens_linha?.forEach((item: any, itemIdx: number) => {
+      console.log(
+        `[normalizeCampaigns] Campanha ${idx}, item ${itemIdx}:`,
+        item.criativos?.length ?? 0,
+        "criativos"
+      );
+
+      item.criativos?.forEach((creative: any) => {
+        const creativeId = String(
+          creative.creative_id?.$numberLong ?? creative.creative_id ?? ""
+        );
+
+        const rawName = creative.creative_name ?? "";
+        const name = rawName.toLowerCase();
+
+        const sizeMatch = rawName.match(/(\d+)x(\d+)/i);
+
+        let width = sizeMatch?.[1] ?? "";
+        let height = sizeMatch?.[2] ?? "";
+
+        if (!width || !height) {
+          width = String(creative.size?.width ?? "");
+          height = String(creative.size?.height ?? "");
+        }
+
+        const size = width && height ? `${width}x${height}` : "";
+
+        let types: string[] = [];
+
+        if (name.includes("desktop e mobile")) {
+          types = ["Desktop", "Mobile"];
+        } else if (name.includes("mobile")) {
+          types = ["Mobile"];
+        } else if (name.includes("desktop")) {
+          types = ["Desktop"];
+        } else {
+          if (width === "300" && height === "250") {
+            types = ["Mobile", "Interno"];
+          } else if (width === "300" && height === "1050") {
+            types = ["Interno"];
+          } else if (
+            (width === "320" && height === "50") ||
+            (width === "320" && height === "100")
+          ) {
+            types = ["Mobile"];
+          } else if (width) {
+            types = ["Desktop"];
+          } else {
+            types = ["Desktop"];
+          }
+        }
+
+        types.forEach((type) => {
+          result.push({
+            orderId,
+            creativeId,
+            row: [
+              customer,
+              nameOrder,
+              poNumber,
+              startDate,
+              endDate,
+              size ? `${size} - ${type}` : "",
+            ],
+          });
+        });
+      });
+    });
+  });
+
+  console.log("[normalizeCampaigns] Retornando", result.length, "linhas");
+
+  return result;
+};

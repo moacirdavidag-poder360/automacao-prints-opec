@@ -1,7 +1,10 @@
 import cron from "node-cron";
 import logger from "./logger.config.js";
+
 import takeScreenshotsService from "../services/screenshots/take-screenshots.service.js";
 import readCampaignSheetService from "../services/campaignsSheets/read-campaign-sheet.service.js";
+import writeCampaignsService from "../services/campaignsSheets/write-campaign-sheet.service.js";
+import getCampaignsService from "../services/campaigns/get-campaigns.service.js";
 
 import type { ICampaignsObjectType } from "../types/campaigns.type.js";
 
@@ -32,6 +35,7 @@ const normalizeCampaigns = (
 
       const isDesktop = type.includes("desktop");
       const isMobile = type.includes("mobile");
+      const isInterno = type.includes("interno");
 
       const baseData: ICampaignsObjectType =
         total > 1
@@ -44,6 +48,25 @@ const normalizeCampaigns = (
               ...campaign,
             };
 
+      if (isDesktop && isMobile && isInterno) {
+        result.push({
+          ...baseData,
+          format: { ...campaign.format, type: "Desktop" },
+        });
+
+        result.push({
+          ...baseData,
+          format: { ...campaign.format, type: "Mobile" },
+        });
+
+        result.push({
+          ...baseData,
+          format: { ...campaign.format, type: "Interno" },
+        });
+
+        return;
+      }
+
       if (isDesktop && isMobile) {
         result.push({
           ...baseData,
@@ -53,6 +76,34 @@ const normalizeCampaigns = (
         result.push({
           ...baseData,
           format: { ...campaign.format, type: "Mobile" },
+        });
+
+        return;
+      }
+
+      if (isMobile && isInterno) {
+        result.push({
+          ...baseData,
+          format: { ...campaign.format, type: "Mobile" },
+        });
+
+        result.push({
+          ...baseData,
+          format: { ...campaign.format, type: "Interno" },
+        });
+
+        return;
+      }
+
+      if (isDesktop && isInterno) {
+        result.push({
+          ...baseData,
+          format: { ...campaign.format, type: "Desktop" },
+        });
+
+        result.push({
+          ...baseData,
+          format: { ...campaign.format, type: "Interno" },
         });
 
         return;
@@ -74,6 +125,14 @@ const normalizeCampaigns = (
         return;
       }
 
+      if (isInterno) {
+        result.push({
+          ...baseData,
+          format: { ...campaign.format, type: "Interno" },
+        });
+        return;
+      }
+
       result.push(baseData);
     });
   }
@@ -82,25 +141,40 @@ const normalizeCampaigns = (
 };
 
 const setupCronPrints = () => {
-  cron.schedule("0 */1 * * * *", async () => {
+  cron.schedule("* */1 * * * *", async () => {
     try {
-      logger.info(
-        "Serviço do cron que vai tirar prints do Poder360 no futuro iniciado e rodando! :D"
-      );
-      const campaigns = await readCampaignSheetService();
-      const normalizedCampaigns = normalizeCampaigns(campaigns);
+      logger.info("[CRON] Iniciando fluxo completo de campanhas");
+
+      const campaignsFromDB = await getCampaignsService();
+
+      logger.info(`[CRON] Campanhas vindas do banco: ${campaignsFromDB.length}`);
+
+      await writeCampaignsService(campaignsFromDB);
+
+      logger.info("[CRON] Planilha atualizada");
+
+      const campaignsFromSheet = await readCampaignSheetService();
+
+      logger.info("[CRON] Campanhas lidas da planilha", {
+        total: campaignsFromSheet.length,
+      });
+
+      const normalizedCampaigns = normalizeCampaigns(campaignsFromSheet);
+
+      logger.info("[CRON] Campanhas normalizadas para execução", {
+        total: normalizedCampaigns.length,
+      });
 
       for (const campaign of normalizedCampaigns) {
         await takeScreenshotsService(campaign);
       }
+
+      logger.info("[CRON] Execução finalizada com sucesso");
     } catch (error) {
-      if (error instanceof Error) {
-        logger.error(
-          `Erro ao iniciar o cron de tirar prints: ${error.message}`
-        );
-      } else {
-        logger.error("Erro ao iniciar o cron de tirar prints:", error);
-      }
+      logger.error("[CRON] Erro na execução do fluxo", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
     }
   });
 };
