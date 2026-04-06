@@ -1,5 +1,4 @@
 import { google } from "googleapis";
-import path from "path";
 import logger from "../../config/logger.config.js";
 
 import dotenv from 'dotenv';
@@ -10,13 +9,12 @@ export const getGoogleAuth = () => {
     
     logger.info("[INFO - GoogleDrive] Iniciando autenticação...");
 
-    const keyFilePath = path.resolve(
-      process.cwd(),
-      process.env.PATH_ARQUIVO_AUTH_GOOGLE_CLOUD
+    const credentials = JSON.parse(
+      Buffer.from(process.env.GOOGLE_CREDENTIALS_B64, 'base64').toString('utf-8')
     );
-    
+
     const auth = new google.auth.GoogleAuth({
-      keyFile: keyFilePath,
+      credentials,
       scopes: ["https://www.googleapis.com/auth/drive"],
     });
 

@@ -93,8 +93,15 @@ export const normalizeCampaigns = (campaigns: any[]) => {
 
         const sizeMatch = rawName.match(/(\d+)x(\d+)/i);
 
-        const width = sizeMatch?.[1] ?? "";
-        const height = sizeMatch?.[2] ?? "";
+        let width = sizeMatch?.[1] ?? "";
+        let height = sizeMatch?.[2] ?? "";
+
+        if (!width || !height) {
+          width = String(creative.size?.width ?? "");
+          height = String(creative.size?.height ?? "");
+        }
+
+        const size = width && height ? `${width}x${height}` : "";
 
         let types: string[] = [];
 
@@ -105,7 +112,14 @@ export const normalizeCampaigns = (campaigns: any[]) => {
         } else if (name.includes("desktop")) {
           types = ["Desktop"];
         } else {
-          if (width === "320" || width === "300") {
+          if (width === "300" && height === "250") {
+            types = ["Mobile", "Interno"];
+          } else if (width === "300" && height === "1050") {
+            types = ["Interno"];
+          } else if (
+            (width === "320" && height === "50") ||
+            (width === "320" && height === "100")
+          ) {
             types = ["Mobile"];
           } else if (width) {
             types = ["Desktop"];
@@ -124,7 +138,7 @@ export const normalizeCampaigns = (campaigns: any[]) => {
               poNumber,
               startDate,
               endDate,
-              width && height ? `${width}x${height} - ${type}` : "",
+              size ? `${size} - ${type}` : "",
             ],
           });
         });

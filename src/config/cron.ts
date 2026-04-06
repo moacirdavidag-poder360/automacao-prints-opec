@@ -35,6 +35,7 @@ const normalizeCampaigns = (
 
       const isDesktop = type.includes("desktop");
       const isMobile = type.includes("mobile");
+      const isInterno = type.includes("interno");
 
       const baseData: ICampaignsObjectType =
         total > 1
@@ -47,6 +48,25 @@ const normalizeCampaigns = (
               ...campaign,
             };
 
+      if (isDesktop && isMobile && isInterno) {
+        result.push({
+          ...baseData,
+          format: { ...campaign.format, type: "Desktop" },
+        });
+
+        result.push({
+          ...baseData,
+          format: { ...campaign.format, type: "Mobile" },
+        });
+
+        result.push({
+          ...baseData,
+          format: { ...campaign.format, type: "Interno" },
+        });
+
+        return;
+      }
+
       if (isDesktop && isMobile) {
         result.push({
           ...baseData,
@@ -56,6 +76,34 @@ const normalizeCampaigns = (
         result.push({
           ...baseData,
           format: { ...campaign.format, type: "Mobile" },
+        });
+
+        return;
+      }
+
+      if (isMobile && isInterno) {
+        result.push({
+          ...baseData,
+          format: { ...campaign.format, type: "Mobile" },
+        });
+
+        result.push({
+          ...baseData,
+          format: { ...campaign.format, type: "Interno" },
+        });
+
+        return;
+      }
+
+      if (isDesktop && isInterno) {
+        result.push({
+          ...baseData,
+          format: { ...campaign.format, type: "Desktop" },
+        });
+
+        result.push({
+          ...baseData,
+          format: { ...campaign.format, type: "Interno" },
         });
 
         return;
@@ -73,6 +121,14 @@ const normalizeCampaigns = (
         result.push({
           ...baseData,
           format: { ...campaign.format, type: "Mobile" },
+        });
+        return;
+      }
+
+      if (isInterno) {
+        result.push({
+          ...baseData,
+          format: { ...campaign.format, type: "Interno" },
         });
         return;
       }
