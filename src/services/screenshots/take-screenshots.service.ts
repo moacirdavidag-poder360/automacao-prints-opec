@@ -76,6 +76,7 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
   }
 
   let driver: WebDriver | null = null;
+  let targetIframe: any = null; // ✅ CORREÇÃO DE ESCOPO
 
   try {
     const isMobile = type.toLowerCase().includes("mobile");
@@ -151,6 +152,69 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
     logger.info(
       `[INFO] Iniciando scroll inteligente para encontrar anúncio ${width}x${height}...`
     );
+
+
+    if (isMobile) {
+      logger.info(`[INFO] Buscando anúncio mobile com XPath + fallback`);
+
+      const waitForElement = async (xpath: string, timeout = 15000) => {
+        const start = Date.now();
+
+        while (Date.now() - start < timeout) {
+          const elements = await driver!.findElements(By.xpath(xpath));
+
+          if (elements.length > 0) {
+            return elements[0];
+          }
+
+          // força carregamento lazy
+          await driver!.executeScript("window.scrollBy(0, 300)");
+          await delay(500);
+        }
+
+        return null;
+      };
+
+      // 🔥 1. TENTA GOOGLE_IMAGE_DIV VIA XPATH
+      const googleDiv = await waitForElement('//*[@id="google_image_div"]');
+
+      if (googleDiv) {
+        try {
+          const img = await googleDiv.findElement(By.css("img.img_ad"));
+          targetIframe = img;
+          logger.info(`[INFO] Encontrado via XPath google_image_div`);
+        } catch {}
+      }
+
+      // 🔥 2. FALLBACK: XPATH DIRETO NO IMG
+      if (!targetIframe) {
+        const img = await waitForElement('//img[contains(@class,"img_ad")]');
+
+        if (img) {
+          targetIframe = img;
+          logger.info(`[INFO] Encontrado via XPath img_ad`);
+        }
+      }
+
+      // 🔥 3. FALLBACK: IFRAME
+      if (!targetIframe) {
+        const iframe = await waitForElement(
+          '//iframe[contains(@id,"google_ads_iframe")]'
+        );
+
+        if (iframe) {
+          targetIframe = iframe;
+          logger.info(`[INFO] Encontrado via XPath iframe`);
+        }
+      }
+
+      if (!targetIframe) {
+        logger.error(
+          `[ERRO] Nenhum anúncio encontrado no mobile (XPath + fallback)`
+        );
+        return;
+      }
+    }
 
     const targetAdFound = await driver.executeScript(`
       return new Promise((resolve) => {
@@ -256,42 +320,43 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
       `[INFO] ${iframeElements.length} iframe(s) + ${imgElements.length} imagem(ns) = ${allElements.length} elemento(s) total`
     );
 
-    let targetIframe = null;
+    // ✅ SE já achou no mobile, pula busca
+    if (!targetIframe) {
+      for (let i = 0; i < allElements.length; i++) {
+        const element = allElements[i];
 
-    for (let i = 0; i < allElements.length; i++) {
-      const element = allElements[i];
+        try {
+          let w = await element!.getAttribute("width");
+          let h = await element!.getAttribute("height");
 
-      try {
-        let w = await element!.getAttribute("width");
-        let h = await element!.getAttribute("height");
+          if (!w || !h || w === "0" || h === "0") {
+            const rect = await element!.getRect();
+            w = String(Math.round(rect.width));
+            h = String(Math.round(rect.height));
+          }
 
-        if (!w || !h || w === "0" || h === "0") {
-          const rect = await element!.getRect();
-          w = String(Math.round(rect.width));
-          h = String(Math.round(rect.height));
+          if (!w || !h) {
+            const rect = await element!.getRect();
+            w = String(rect.width);
+            h = String(rect.height);
+          }
+
+          logger.info(
+            `[INFO] Elemento ${i}: ${w}x${h} (alvo: ${width}x${height})`
+          );
+
+          if (String(w) === String(width) && String(h) === String(height)) {
+            targetIframe = element;
+            logger.info(`[INFO] Anúncio alvo encontrado no índice ${i}`);
+            break;
+          }
+        } catch (err) {
+          logger.warn(
+            `[WARNING] Erro ao verificar elemento ${i}: ${
+              err instanceof Error ? err.message : String(err)
+            }`
+          );
         }
-
-        if (!w || !h) {
-          const rect = await element!.getRect();
-          w = String(rect.width);
-          h = String(rect.height);
-        }
-
-        logger.info(
-          `[INFO] Elemento ${i}: ${w}x${h} (alvo: ${width}x${height})`
-        );
-
-        if (String(w) === String(width) && String(h) === String(height)) {
-          targetIframe = element;
-          logger.info(`[INFO] Anúncio alvo encontrado no índice ${i}`);
-          break;
-        }
-      } catch (err) {
-        logger.warn(
-          `[WARNING] Erro ao verificar elemento ${i}: ${
-            err instanceof Error ? err.message : String(err)
-          }`
-        );
       }
     }
 
