@@ -114,6 +114,8 @@ export const normalizeCampaigns = (campaigns: any[]) => {
         } else {
           if (width === "300" && height === "250") {
             types = ["Mobile", "Interno"];
+          } else if (width === "300" && height === "600") {
+            types = ["Mobile", "Desktop"];
           } else if (width === "300" && height === "1050") {
             types = ["Interno"];
           } else if (
@@ -149,4 +151,36 @@ export const normalizeCampaigns = (campaigns: any[]) => {
   console.log("[normalizeCampaigns] Retornando", result.length, "linhas");
 
   return result;
+};
+
+export const batchWriteSheets = async (
+  sheetsWriteFn: (values: any[][]) => Promise<void>,
+  allValues: any[][],
+  batchSize = 50,
+  waitMs = 1000
+) => {
+  for (let i = 0; i < allValues.length; i += batchSize) {
+    const batch = allValues.slice(i, i + batchSize);
+    logger.info(`[GoogleSheets] Escrevendo batch ${i / batchSize + 1} de ${Math.ceil(allValues.length / batchSize)}`);
+    await sheetsWriteFn(batch);
+    if (i + batchSize < allValues.length) {
+      await delay(waitMs);
+    }
+  }
+};
+
+export const batchReadSheets = async (
+  sheetsReadFn: (range: string) => Promise<any[][]>,
+  ranges: string[],
+  waitMs = 1000
+) => {
+  const results: any[][] = [];
+  for (let i = 0; i < ranges.length; i++) {
+    const batchResult = await sheetsReadFn(ranges[i]);
+    results.push(...batchResult);
+    if (i + 1 < ranges.length) {
+      await delay(waitMs);
+    }
+  }
+  return results;
 };

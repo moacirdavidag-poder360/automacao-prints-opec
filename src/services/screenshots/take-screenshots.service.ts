@@ -121,25 +121,24 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
 
     await page.waitForTimeout(4000);
 
-    await page.evaluate(async () => {
-      await new Promise<void>((resolve) => {
-        let total = 0;
-        const distance = 400;
-
-        const timer = setInterval(() => {
-          window.scrollBy(0, distance);
-          total += distance;
-
-          const scrollHeight = document.body.scrollHeight;
-          if (total >= scrollHeight) {
-            clearInterval(timer);
-            resolve();
-          }
-        }, 200);
-      });
-    });
-
-    await page.waitForTimeout(4000);
+    await page.evaluate(
+      ({ width, height }) => {
+        const adIframe = Array.from(
+          document.querySelectorAll(`iframe[id^="google_ads_iframe_"]`)
+        ).find(
+          (iframe) =>
+            iframe.getAttribute("width") === String(width) &&
+            iframe.getAttribute("height") === String(height)
+        );
+    
+        if (adIframe) {
+          adIframe.scrollIntoView({ block: "center", behavior: "auto" });
+        }
+      },
+      { width, height }
+    );
+    
+    await page.waitForTimeout(2000);
 
     await page.evaluate(() => {
       const adVideoBlock = document.querySelector(".HPR_VIDEO") as HTMLElement;
