@@ -54,16 +54,12 @@ const takeDesktopScreenshotsService = async (campaign: ICampaignsObjectType) => 
   }
 
   if (!width || height) {
-    logger.error(
-      `[ERROR] A campanha ${name} - não tem largura ou altura definida! Preencha na planilha!`
-    );
+    logger.error(`[ERROR] A campanha ${name} - não tem largura ou altura definida! Preencha na planilha!`);
     return;
   }
 
   if (!previewLink) {
-    logger.error(
-      `[ERROR] A campanha ${name} - largura: ${width} - altura: ${height} - não tem link de preview! Preencha na planilha!`
-    );
+    logger.error(`[ERROR] A campanha ${name} - largura: ${width} - altura: ${height} - não tem link de preview! Preencha na planilha!`);
     return;
   }
 
@@ -134,14 +130,14 @@ const takeDesktopScreenshotsService = async (campaign: ICampaignsObjectType) => 
             iframe.getAttribute("width") === String(width) &&
             iframe.getAttribute("height") === String(height)
         );
-
+    
         if (adIframe) {
           adIframe.scrollIntoView({ block: "center", behavior: "auto" });
         }
       },
       { width, height }
     );
-
+    
     await page.waitForTimeout(2000);
 
     await page.evaluate(() => {
