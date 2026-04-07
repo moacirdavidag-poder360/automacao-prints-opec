@@ -1,9 +1,11 @@
 import cron from "node-cron";
 import logger from "./logger.config.js";
-import takeScreenshotsService from "../services/screenshots/take-screenshots.service.js";
 import readCampaignSheetService from "../services/campaignsSheets/read-campaign-sheet.service.js";
+import takeMobileScreenshotsService from "../services/screenshots/mobile-screenshot.service.js";
+import takeDesktopScreenshotsService from "../services/screenshots/desktop-screenshot.service.js";
 
 import type { ICampaignsObjectType } from "../types/campaigns.type.js";
+
 
 const normalizeCampaigns = (
   campaigns: ICampaignsObjectType[]
@@ -97,7 +99,14 @@ const setupCronPrints = () => {
       const normalizedCampaigns = normalizeCampaigns(campaigns);
 
       for (const campaign of normalizedCampaigns) {
-        await takeScreenshotsService(campaign);
+        const isMobile = String(campaign.format.type.toLowerCase() === 'mobile');
+        const isDesktop = String(campaign.format.type.toLowerCase() === 'desktop');
+        if(isMobile) {
+          await takeMobileScreenshotsService(campaign);
+        } 
+        if (isDesktop) {
+          await takeDesktopScreenshotsService(campaign);
+        }
       }
     } catch (error) {
       if (error instanceof Error) {

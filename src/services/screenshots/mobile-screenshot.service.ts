@@ -17,7 +17,7 @@ import { uploadFileToDrive } from "../googleDrive/google-drive-upload.service.js
 import type { ICampaignsObjectType } from "../../types/campaigns.type.js";
 import { delay, sanitize } from "../../utils/functions.js";
 
-const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
+const takeMobileScreenshotsService = async (campaign: ICampaignsObjectType) => {
   const {
     customer,
     format,
@@ -469,4 +469,4 @@ const takeScreenshotsService = async (campaign: ICampaignsObjectType) => {
   }
 };
 
-export default takeScreenshotsService;
+export default takeMobileScreenshotsService;
