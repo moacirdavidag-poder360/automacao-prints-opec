@@ -221,6 +221,10 @@ export const uploadFileToDrive = async ({
       supportsAllDrives: true,
     });
 
+    logger.debug(`[GoogleDrive] Resposta upload`, {
+      data: response.data,
+    });
+
     logger.info(`[GoogleDrive] Upload concluído`, {
       fileName,
       fileId: response.data.id,
