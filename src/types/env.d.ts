@@ -12,5 +12,6 @@ declare namespace NodeJS {
     MONGO_URI: string;
     MONGO_DB_NAME: string;
     NOME_ABA_PLANILHA: string;
+    DOWNLOAD_PATH_DIR: string;
   }
 }

@@ -1,4 +1,4 @@
-import { Builder, WebDriver, By } from "selenium-webdriver";
+import { Builder, WebDriver, By, WebElement } from "selenium-webdriver";
 import chrome from "selenium-webdriver/chrome.js";
 import screenshot from "screenshot-desktop";
 import dayjs from "dayjs";
@@ -158,17 +158,17 @@ const takeMobileScreenshotsService = async (campaign: ICampaignsObjectType) => {
 
     await delay(2000);
 
-    // const iframe = await driver.findElement({
-    //   css: "iframe[name='simulator']",
-    // });
-    // await driver.switchTo().frame(iframe);
+    const iframe = await driver.findElement({
+      css: "iframe[name='simulator']",
+    });
+    await driver.switchTo().frame(iframe);
 
-    // const html = await driver.getPageSource();
+    const html = await driver.getPageSource();
 
-    // const tmpFilePath = path.resolve(process.cwd(), "tmp.html");
-    // fs.writeFileSync(tmpFilePath, html, "utf-8");
+    const tmpFilePath = path.resolve(process.cwd(), "tmp.html");
+    fs.writeFileSync(tmpFilePath, html, "utf-8");
 
-    // logger.info(`[INFO] HTML da página salvo em: ${tmpFilePath}`);
+    logger.info(`[INFO] HTML da página salvo em: ${tmpFilePath}`);
 
     const findAdElement = async () => {
       const frames = await driver!.findElements({ css: "iframe" });
@@ -251,49 +251,84 @@ const takeMobileScreenshotsService = async (campaign: ICampaignsObjectType) => {
 
     logger.info(`[INFO] Iniciando fluxo da extensão para captura`);
 
-    const clickWhenVisible = async (locator: any, label: string) => {
-      const el = await driver!.wait(locator, 15000);
-      await driver!.wait(async () => {
-        return await el.isDisplayed();
-      }, 10000);
+    await driver!.switchTo().defaultContent();
+    logger.info(`[INFO] Contexto resetado para página principal`);
+
+    const clickWhenVisible = async (by: any, label: string) => {
+      const el = (await driver!.wait(async () => {
+        try {
+          const element = await driver!.findElement(by);
+          const visible = await element.isDisplayed();
+          return visible ? element : null;
+        } catch {
+          return null;
+        }
+      }, 15000)) as WebElement;
+
       await el.click();
       logger.info(`[INFO] Clique realizado: ${label}`);
       await delay(1500);
     };
 
+    await clickWhenVisible(By.css("button.icon-photo"), "botão abrir captura");
+
     await clickWhenVisible(
-      driver!.findElement(By.css("button.icon-photo")),
-      "botão abrir captura"
+      By.xpath("//input[@value='without-frame']/ancestor::label"),
+      "seleção device sem mockup"
     );
 
     await clickWhenVisible(
-      driver!.findElement(By.css("label.b-radio")),
-      "seleção device"
-    );
-
-    await clickWhenVisible(
-      driver!.findElement(
-        By.xpath("//button[.//span[text()='Gerar uma captura']]")
-      ),
+      By.xpath("//button[.//span[text()='Gerar uma captura']]"),
       "gerar captura"
     );
 
     await clickWhenVisible(
-      driver!.findElement(By.css("a[download]")),
-      "download imagem"
+      By.xpath(
+        "(//div[contains(@class,'actions')]//a[contains(@download,'.png')])[1]"
+      ),
+      "download PNG"
     );
 
-    const filename = path.join(
-      screenshotsDir,
-      `${width}x${height}${kvPart}_${typeSuffix}.png`
-    );
+    logger.info(`Print mobile tirado com a extensão!`);
 
-    await screenshot({ filename });
+    const DOWNLOAD_PATH_DIR = process.env.DOWNLOAD_PATH_DIR as string;
 
-    logger.info(`[INFO] Print tirado: ${filename}`);
+    const originalFileName = "iPhone-13-PRO-www.poder360.com.br.png";
+
+    const sourcePath = path.join(DOWNLOAD_PATH_DIR, originalFileName);
+
+    const finalFilename = `${width}x${height}${kvPart}_${typeSuffix}.png`;
+
+    const destinationPath = path.join(screenshotsDir, finalFilename);
+
+    const waitForDownload = async (filePath: string, timeout = 15000) => {
+      const start = Date.now();
+
+      while (Date.now() - start < timeout) {
+        if (fs.existsSync(filePath)) {
+          return true;
+        }
+        await delay(500);
+      }
+
+      return false;
+    };
+
+    const downloaded = await waitForDownload(sourcePath);
+
+    if (!downloaded) {
+      throw new Error(
+        "Arquivo de print mobile não encontrado na pasta de Downloads"
+      );
+    }
+
+    fs.copyFileSync(sourcePath, destinationPath);
+    fs.unlinkSync(sourcePath);
+
+    logger.info(`[INFO] Arquivo movido para: ${destinationPath}`);
 
     await uploadFileToDrive({
-      filePath: filename,
+      filePath: destinationPath,
       campaingName: safeDirectoryName,
     });
 
