@@ -4,6 +4,8 @@ import { getGoogleAuth } from "../googleDrive/google-drive-auth.service.js";
 
 const SHEET_NAME = process.env.NOME_ABA_PLANILHA;
 
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const writeCampaignsService = async (rawCampaigns: any[]) => {
   try {
     logger.info("[GoogleSheets] Iniciando escrita de campanhas");
@@ -20,16 +22,43 @@ const writeCampaignsService = async (rawCampaigns: any[]) => {
       total: normalized.length,
     });
 
-    const getRes = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${SHEET_NAME}!A1:I1000`,
-    });
+    let allRows: string[][] = [];
+    let startRow = 1;
+    const batchSize = 200;
 
-    const rows = (getRes.data.values || []).filter((row): row is string[] =>
-      Array.isArray(row)
-    );
+    while (true) {
+      const endRow = startRow + batchSize - 1;
+      const range = `${SHEET_NAME}!A${startRow}:I${endRow}`;
 
-    if (rows.length <= 1) {
+      logger.info("[GoogleSheets] Lendo lote", { range });
+
+      const res = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range,
+      });
+
+      const rows = (res.data.values || []).filter((row): row is string[] =>
+        Array.isArray(row)
+      );
+
+      if (!rows.length) break;
+
+      allRows = allRows.concat(rows);
+
+      logger.info("[GoogleSheets] Lote lido", {
+        quantidade: rows.length,
+        acumulado: allRows.length,
+      });
+
+      if (rows.length < batchSize) break;
+
+      startRow += batchSize;
+
+      logger.info("[GoogleSheets] Aguardando 30s para próximo lote...");
+      await delay(30000);
+    }
+
+    if (allRows.length <= 1) {
       logger.info("[GoogleSheets] Planilha vazia detectada");
 
       const newRows = normalized
@@ -72,10 +101,9 @@ const writeCampaignsService = async (rawCampaigns: any[]) => {
       return;
     }
 
-    const data = rows.slice(1);
-    const existingKeys = new Set(
-      data.map((row) => `${row[7]}|${row[8]}`)
-    );
+    const data = allRows.slice(1);
+
+    const existingKeys = new Set(data.map((row) => `${row[7]}|${row[8]}`));
 
     logger.debug("[GoogleSheets] Chaves existentes", {
       quantidade: existingKeys.size,
@@ -126,12 +154,31 @@ const writeCampaignsService = async (rawCampaigns: any[]) => {
       startRow: appendStartRow,
     });
 
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${SHEET_NAME}!A${appendStartRow}`,
-      valueInputOption: "RAW",
-      requestBody: { values: newRows },
-    });
+    const writeBatchSize = 100;
+
+    for (let i = 0; i < newRows.length; i += writeBatchSize) {
+      const batch = newRows.slice(i, i + writeBatchSize);
+      const range = `${SHEET_NAME}!A${appendStartRow + i}`;
+
+      logger.info("[GoogleSheets] Escrevendo lote", {
+        inicio: appendStartRow + i,
+        quantidade: batch.length,
+      });
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range,
+        valueInputOption: "RAW",
+        requestBody: { values: batch },
+      });
+
+      logger.info("[GoogleSheets] Lote escrito com sucesso");
+
+      if (i + writeBatchSize < newRows.length) {
+        logger.info("[GoogleSheets] Aguardando 30s para próximo lote...");
+        await delay(30000);
+      }
+    }
 
     logger.info("[GoogleSheets] Novas campanhas adicionadas com sucesso", {
       totalNovas: newRows.length,

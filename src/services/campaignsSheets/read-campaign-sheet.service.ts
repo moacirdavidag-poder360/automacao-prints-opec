@@ -5,53 +5,119 @@ import type {
   ICampaignsObjectType,
   ICampaignsSheetType,
 } from "../../types/campaigns.type.js";
-import { mapRowToObject } from "../../utils/functions.js";
+import { mapRowToObject, delay } from "../../utils/functions.js";
+import logger from "../../config/logger.config.js";
+
+const BATCH_SIZE = 100;
+const BATCH_DELAY = 8000;
 
 const readCampaignSheetService = async (): Promise<ICampaignsObjectType[]> => {
   const SHEET_NAME = process.env.NOME_ABA_PLANILHA;
-  const auth = getGoogleAuth();
+  const spreadsheetId = process.env.PLANILHA_CAMPANHAS_ID as string;
 
+  const auth = getGoogleAuth();
   const sheets = google.sheets({ version: "v4", auth });
 
-  const spreadsheetId = process.env.PLANILHA_CAMPANHAS_ID;
-  const range = `${SHEET_NAME}!A1:Z1000`;
+  logger.info("[Sheets] Iniciando leitura da planilha");
 
-  const response = await sheets.spreadsheets.values.get({
+  const headerRes = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range,
+    range: `${SHEET_NAME}!A1:Z1`,
   });
 
-  const rows = response.data.values ?? [];
+  const headers = headerRes.data.values?.[0] as string[];
 
-  if (!rows.length) return [];
+  if (!headers || !headers.length) {
+    logger.warn("[Sheets] Nenhum header encontrado");
+    return [];
+  }
 
-  const headers = rows[0] as string[];
-  const data = rows.slice(1);
+  logger.info("[Sheets] Headers carregados");
 
-  const campaigns: ICampaignsObjectType[] = data.map((row) => {
-    const campaign = mapRowToObject<ICampaignsSheetType>(headers, row);
+  const meta = await sheets.spreadsheets.get({
+    spreadsheetId,
+    includeGridData: false,
+  });
 
-    const rawFormat = campaign["Formato (s)"] || "";
+  const sheet = meta.data.sheets?.find(
+    (s) => s.properties?.title === SHEET_NAME
+  );
 
-    const [sizePart, typePart] = rawFormat.split(" - ");
+  const totalRows = sheet?.properties?.gridProperties?.rowCount || 0;
 
-    const [width, height] = (sizePart || "")
-      .split("x")
-      .map((value) => value.trim());
+  logger.info("[Sheets] Total de linhas detectadas", { totalRows });
 
-    return {
-      customer: campaign.Cliente,
-      name: campaign["Nome da campanha"],
-      format: {
-        width: width || "",
-        height: height || "",
-        type: typePart?.trim() || "",
-      },
-      startDate: campaign["Data de início veiculação"],
-      endDate: campaign["Data de término veiculação"],
-      poNumber: campaign["Número PI/PO"],
-      previewLink: campaign["Link de Preview"],
-    };
+  const campaigns: ICampaignsObjectType[] = [];
+
+  let startRow = 2;
+
+  while (startRow <= totalRows) {
+    const endRow = startRow + BATCH_SIZE - 1;
+
+    const range = `${SHEET_NAME}!A${startRow}:Z${endRow}`;
+
+    logger.info("[Sheets] Lendo lote", { startRow, endRow });
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range,
+    });
+
+    const rows = response.data.values ?? [];
+
+    if (!rows.length) {
+      logger.warn("[Sheets] Nenhum dado encontrado no lote", {
+        startRow,
+        endRow,
+      });
+      break;
+    }
+
+    const parsed = rows.map((row) => {
+      const campaign = mapRowToObject<ICampaignsSheetType>(headers, row);
+
+      const rawFormat = campaign["Formato (s)"] || "";
+
+      const [sizePart, typePart] = rawFormat.split(" - ");
+
+      const [width, height] = (sizePart || "")
+        .split("x")
+        .map((value) => value.trim());
+
+      return {
+        customer: campaign.Cliente,
+        name: campaign["Nome da campanha"],
+        format: {
+          width: width || "",
+          height: height || "",
+          type: typePart?.trim() || "",
+        },
+        startDate: campaign["Data de início veiculação"],
+        endDate: campaign["Data de término veiculação"],
+        poNumber: campaign["Número PI/PO"],
+        previewLink: campaign["Link de Preview"],
+      };
+    });
+
+    campaigns.push(...parsed);
+
+    logger.info("[Sheets] Lote processado", {
+      quantidade: parsed.length,
+      acumulado: campaigns.length,
+    });
+
+    startRow += BATCH_SIZE;
+
+    if (startRow <= totalRows) {
+      logger.warn("[Sheets] Aguardando próximo lote", {
+        delay: BATCH_DELAY,
+      });
+      await delay(BATCH_DELAY);
+    }
+  }
+
+  logger.info("[Sheets] Leitura finalizada", {
+    total: campaigns.length,
   });
 
   return campaigns;

@@ -54,7 +54,7 @@ const takeMobileScreenshotsService = async (campaign: ICampaignsObjectType) => {
     return;
   }
 
-  let typeSuffix = type.toLowerCase().includes("desktop")
+  let typeSuffix = type.toLowerCase().includes("desktop") || type.toLowerCase().includes("interno")
     ? "D"
     : type.toLowerCase().includes("mobile")
     ? "M"
@@ -162,13 +162,6 @@ const takeMobileScreenshotsService = async (campaign: ICampaignsObjectType) => {
       css: "iframe[name='simulator']",
     });
     await driver.switchTo().frame(iframe);
-
-    const html = await driver.getPageSource();
-
-    const tmpFilePath = path.resolve(process.cwd(), "tmp.html");
-    fs.writeFileSync(tmpFilePath, html, "utf-8");
-
-    logger.info(`[INFO] HTML da página salvo em: ${tmpFilePath}`);
 
     const findAdElement = async () => {
       const frames = await driver!.findElements({ css: "iframe" });
