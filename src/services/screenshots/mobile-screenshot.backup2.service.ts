@@ -1,4 +1,4 @@
-import { Builder, WebDriver, By } from "selenium-webdriver";
+import { Builder, WebDriver } from "selenium-webdriver";
 import chrome from "selenium-webdriver/chrome.js";
 import screenshot from "screenshot-desktop";
 import dayjs from "dayjs";
@@ -158,17 +158,17 @@ const takeMobileScreenshotsService = async (campaign: ICampaignsObjectType) => {
 
     await delay(2000);
 
-    // const iframe = await driver.findElement({
-    //   css: "iframe[name='simulator']",
-    // });
-    // await driver.switchTo().frame(iframe);
+    const iframe = await driver.findElement({
+      css: "iframe[name='simulator']",
+    });
+    await driver.switchTo().frame(iframe);
 
-    // const html = await driver.getPageSource();
+    const html = await driver.getPageSource();
 
-    // const tmpFilePath = path.resolve(process.cwd(), "tmp.html");
-    // fs.writeFileSync(tmpFilePath, html, "utf-8");
+    const tmpFilePath = path.resolve(process.cwd(), "tmp.html");
+    fs.writeFileSync(tmpFilePath, html, "utf-8");
 
-    // logger.info(`[INFO] HTML da página salvo em: ${tmpFilePath}`);
+    logger.info(`[INFO] HTML da página salvo em: ${tmpFilePath}`);
 
     const findAdElement = async () => {
       const frames = await driver!.findElements({ css: "iframe" });
@@ -190,7 +190,6 @@ const takeMobileScreenshotsService = async (campaign: ICampaignsObjectType) => {
           );
 
           if (found) {
-            logger.info(`[INFO] Anúncio encontrado dentro de iframe`);
             return true;
           }
 
@@ -214,24 +213,11 @@ const takeMobileScreenshotsService = async (campaign: ICampaignsObjectType) => {
             });
           `);
 
-        if (found) {
-          logger.info(`[INFO] Anúncio encontrado no DOM principal`);
-        }
-
         if (!found) {
           found = await findAdElement();
         }
 
-        if (found) {
-          logger.info(
-            `[INFO] Anúncio ${width}x${height} localizado com sucesso`
-          );
-          return true;
-        }
-
-        logger.warn(
-          `[WAIT] Anúncio ainda não encontrado, tentando novamente...`
-        );
+        if (found) return true;
 
         robot.scrollMouse(0, -400);
         await delay(700);
@@ -249,39 +235,67 @@ const takeMobileScreenshotsService = async (campaign: ICampaignsObjectType) => {
       return;
     }
 
-    logger.info(`[INFO] Iniciando fluxo da extensão para captura`);
-
-    const clickWhenVisible = async (locator: any, label: string) => {
-      const el = await driver!.wait(locator, 15000);
-      await driver!.wait(async () => {
-        return await el.isDisplayed();
-      }, 10000);
-      await el.click();
-      logger.info(`[INFO] Clique realizado: ${label}`);
-      await delay(1500);
-    };
-
-    await clickWhenVisible(
-      driver!.findElement(By.css("button.icon-photo")),
-      "botão abrir captura"
+    await driver.executeScript(
+      `
+        function findAd(win) {
+          try {
+            const el = Array.from(win.document.querySelectorAll('*')).find(el => {
+              const rect = el.getBoundingClientRect();
+              return rect.width === arguments[0] && rect.height === arguments[1];
+            });
+      
+            if (el) return { el, win };
+      
+            const iframes = win.document.querySelectorAll("iframe");
+      
+            for (const iframe of iframes) {
+              try {
+                if (iframe.contentWindow) {
+                  const result = findAd(iframe.contentWindow);
+                  if (result) return result;
+                }
+              } catch {}
+            }
+          } catch {}
+      
+          return null;
+        }
+      
+        const result = findAd(window);
+      
+        if (result && result.el) {
+          const el = result.el;
+      
+          el.scrollIntoView({ block: 'center' });
+          el.setAttribute('data-target-ad', 'true');
+      
+          let parent = el.parentElement;
+          while (parent) {
+            parent.setAttribute('data-target-ad', 'true');
+            parent = parent.parentElement;
+          }
+      
+          const hide = (el) => {
+            el.style.display = 'none';
+            el.style.visibility = 'hidden';
+            el.style.opacity = '0';
+          };
+      
+          result.win.document.querySelectorAll('*').forEach(el => {
+            if (!el.closest('[data-target-ad="true"]')) {
+              const rect = el.getBoundingClientRect();
+              if (rect.width > 0 && rect.height > 0) {
+                hide(el);
+              }
+            }
+          });
+        }
+        `,
+      width,
+      height
     );
 
-    await clickWhenVisible(
-      driver!.findElement(By.css("label.b-radio")),
-      "seleção device"
-    );
-
-    await clickWhenVisible(
-      driver!.findElement(
-        By.xpath("//button[.//span[text()='Gerar uma captura']]")
-      ),
-      "gerar captura"
-    );
-
-    await clickWhenVisible(
-      driver!.findElement(By.css("a[download]")),
-      "download imagem"
-    );
+    await delay(1500);
 
     const filename = path.join(
       screenshotsDir,

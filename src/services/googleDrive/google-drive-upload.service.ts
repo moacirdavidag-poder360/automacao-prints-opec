@@ -219,13 +219,10 @@ export const uploadFileToDrive = async ({
       },
       fields: "id",
       supportsAllDrives: true,
-<<<<<<< HEAD
     });
 
     logger.debug(`[GoogleDrive] Resposta upload`, {
       data: response.data,
-=======
->>>>>>> 167e667bbb313ee5b09244ede882701d5c64832b
     });
 
     logger.info(`[GoogleDrive] Upload concluído`, {

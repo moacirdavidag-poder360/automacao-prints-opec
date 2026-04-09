@@ -1,14 +1,13 @@
 import cron from "node-cron";
 import logger from "./logger.config.js";
-import takeMobileScreenshotsService from "../services/screenshots/mobile-screenshot.service.js";
 import takeDesktopScreenshotsService from "../services/screenshots/desktop-screenshot.service.js";
+import takeMobileScreenshotsService from "../services/screenshots/mobile-screenshot.service.js";
 
 import readCampaignSheetService from "../services/campaignsSheets/read-campaign-sheet.service.js";
 import writeCampaignsService from "../services/campaignsSheets/write-campaign-sheet.service.js";
 import getCampaignsService from "../services/campaigns/get-campaigns.service.js";
 
 import type { ICampaignsObjectType } from "../types/campaigns.type.js";
-
 
 const normalizeCampaigns = (
   campaigns: ICampaignsObjectType[]
@@ -142,8 +141,17 @@ const normalizeCampaigns = (
   return result;
 };
 
+let isRunning = false;
+
 const setupCronPrints = () => {
-  cron.schedule("* */1 * * * *", async () => {
+  cron.schedule("0 */1 * * * *", async () => {
+    if (isRunning) {
+      logger.warn("[CRON] Execução já em andamento, pulando...");
+      return;
+    }
+
+    isRunning = true;
+
     try {
       logger.info("[CRON] Iniciando fluxo completo de campanhas");
 
@@ -168,11 +176,11 @@ const setupCronPrints = () => {
       });
 
       for (const campaign of normalizedCampaigns) {
-        const isMobile = String(campaign.format.type.toLowerCase() === 'mobile');
-        const isDesktop = String(campaign.format.type.toLowerCase() === 'desktop');
-        if(isMobile) {
+        const isMobile = campaign.format.type.toLowerCase() === "mobile";
+        const isDesktop = campaign.format.type.toLowerCase() === "desktop";
+        if (isMobile) {
           await takeMobileScreenshotsService(campaign);
-        } 
+        }
         if (isDesktop) {
           await takeDesktopScreenshotsService(campaign);
         }
@@ -184,6 +192,8 @@ const setupCronPrints = () => {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });
+    } finally {
+      isRunning = false;
     }
   });
 };
