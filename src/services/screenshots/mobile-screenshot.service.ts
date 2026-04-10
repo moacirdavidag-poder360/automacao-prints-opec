@@ -1,6 +1,5 @@
 import { Builder, WebDriver, By, WebElement } from "selenium-webdriver";
 import chrome from "selenium-webdriver/chrome.js";
-import screenshot from "screenshot-desktop";
 import dayjs from "dayjs";
 import fs from "node:fs";
 import path from "node:path";

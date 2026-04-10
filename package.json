@@ -4,16 +4,21 @@
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "start": "tsx index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
     "dev": "tsx watch index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop poderads-bot",
+    "pm2:restart": "pm2 restart poderads-bot",
+    "pm2:logs": "pm2 logs poderad-bot",
+    "pm2:monit": "pm2 monit",
+    "pm2:list": "pm2 list"
   },
   "keywords": [],
   "author": "moacirdavidag",
   "license": "ISC",
   "description": "",
   "devDependencies": {
-    "@types/mongoose": "^5.11.96",
     "@types/node": "^25.5.0",
     "@types/screenshot-desktop": "^1.15.0",
     "@types/selenium-webdriver": "^4.35.5",
@@ -29,6 +34,7 @@
     "mongoose": "^9.3.3",
     "node-cron": "^4.2.1",
     "playwright": "^1.59.1",
+    "pm2": "^6.0.14",
     "robotjs": "^0.7.0",
     "screenshot-desktop": "^1.15.3",
     "selenium-webdriver": "^4.41.0",

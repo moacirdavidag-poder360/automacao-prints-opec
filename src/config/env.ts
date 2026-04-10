@@ -29,4 +29,5 @@ export const ENV_VARS = {
   MONGO_URI: require('MONGO_URI'),
   NOME_ABA_PLANILHA: require('NOME_ABA_PLANILHA'),
   DOWNLOAD_PATH_DIR: require('DOWNLOAD_PATH_DIR'),
+  BOT_CRON: require('DOWNLOAD_PATH_DIR'),
 };

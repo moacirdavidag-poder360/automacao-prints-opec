@@ -176,7 +176,7 @@ export const batchReadSheets = async (
 ) => {
   const results: any[][] = [];
   for (let i = 0; i < ranges.length; i++) {
-    const batchResult = await sheetsReadFn(ranges[i]);
+    const batchResult = await sheetsReadFn(ranges[i]!);
     results.push(...batchResult);
     if (i + 1 < ranges.length) {
       await delay(waitMs);
