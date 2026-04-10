@@ -9,6 +9,8 @@ import getCampaignsService from "../services/campaigns/get-campaigns.service.js"
 
 import type { ICampaignsObjectType } from "../types/campaigns.type.js";
 
+import dotenv from "dotenv";
+dotenv.config();
 
 
 const normalizeCampaigns = (
@@ -146,7 +148,8 @@ const normalizeCampaigns = (
 let isRunning = false;
 
 const setupCronPrints = () => {
-  cron.schedule("0 */1 * * * *", async () => {
+  const CRON = process.env.BOT_CRON || '0 0 */3 * * *';
+  cron.schedule(CRON, async () => {
     if (isRunning) {
       logger.warn("[CRON] Execução já em andamento, pulando...");
       return;
@@ -157,13 +160,13 @@ const setupCronPrints = () => {
     try {
       logger.info("[CRON] Iniciando fluxo completo de campanhas");
 
-      // const campaignsFromDB = await getCampaignsService();
+      const campaignsFromDB = await getCampaignsService();
 
-      // logger.info(`[CRON] Campanhas vindas do banco: ${campaignsFromDB.length}`);
+      logger.info(`[CRON] Campanhas vindas do banco: ${campaignsFromDB.length}`);
 
-      // await writeCampaignsService(campaignsFromDB);
+      await writeCampaignsService(campaignsFromDB);
 
-      // logger.info("[CRON] Planilha atualizada");
+      logger.info("[CRON] Planilha atualizada");
 
       const campaignsFromSheet = await readCampaignSheetService();
 
