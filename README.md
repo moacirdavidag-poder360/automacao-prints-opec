@@ -64,32 +64,32 @@ Crie um `.env` baseado no `.env.example`
 
 -   `GOOGLE_CHROME_PROFILE_PATH`: perfil limpo (desktop)
 -   `GOOGLE_CHROME_PROFILE_PATH_MOBILE`: perfil EXCLUSIVO para mobile
--   `GOOGLE_CHROME_EXTENSION_PATH`: extensão de simulação mobile
+-   `GOOGLE_CHROME_EXTENSION_PATH`: pasta com a extensão de Simulador de Dispositivo Móvel descompactada
 
 ------------------------------------------------------------------------
 
 ### 📊 Planilha
 
-    PLANILHA_CAMPANHAS_ID=
-    NOME_ABA_PLANILHA=
+    PLANILHA_CAMPANHAS_ID= # ID DA PLANILHA QUE USAMOS (TÁ NO GOOGLE DRIVE)
+    NOME_ABA_PLANILHA= # "Página 1" por padrão
 
 ------------------------------------------------------------------------
 
 ### 🗄 Banco
 
-    MONGO_URI=
+    MONGO_URI= # URL do banco de dados apontando para o poder-ads
 
 ------------------------------------------------------------------------
 
 ### 📁 Downloads
 
-    DOWNLOAD_PATH_DIR=
+    DOWNLOAD_PATH_DIR= # Caminho da pasta de Downloads da máquina
 
 ------------------------------------------------------------------------
 
 ### ⏲ Cron
 
-    BOT_CRON=
+    BOT_CRON= # Configuração do intervalo do CRON para o bot
 
 Exemplo:
 
