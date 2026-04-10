@@ -136,23 +136,29 @@ const takeDesktopScreenshotsService = async (
       const links = await page.$$eval(".box-news-list__subhead a", (els) =>
         els.map((el) => (el as HTMLAnchorElement).href)
       );
-
+    
+      const url = new URL(previewLink);
+      const googlePreview = url.searchParams.get("google_preview");
+    
       if (links.length > 0) {
-        const randomLink = links[Math.floor(Math.random() * links.length)];
-
-        logger.info(`[INFO] Acessando matéria interna: ${randomLink}`);
-
-        await page.goto(randomLink!, {
+        const baseLink = links[Math.floor(Math.random() * links.length)];
+    
+        const finalUrl = googlePreview
+          ? `${baseLink}?google_preview=${googlePreview}`
+          : baseLink;
+    
+        logger.info(`[INFO] Acessando matéria interna: ${finalUrl}`);
+    
+        await page.goto(finalUrl!, {
           waitUntil: "domcontentloaded",
           timeout: 60000,
         });
-
+    
         await page.waitForTimeout(4000);
-
-        // @moacirdavidag - Eu diminuo o zoom para 50% para tirar print pq esse formato é muito grande
-        if(width === "300" && height === "1050") {
+    
+        if (width === "300" && height === "1050") {
           await page.evaluate(() => {
-            document.body.style.zoom = '0.5'; 
+            document.body.style.zoom = "0.5";
           });
         }
       }
@@ -260,10 +266,18 @@ const takeDesktopScreenshotsService = async (
       `${width}x${height}${kvPart}_${typeSuffix}.png`
     );
 
-    await page.evaluate(() => {
-      const cleanUrl = window.location.origin + window.location.pathname;
-      window.history.replaceState({}, "", cleanUrl);
-    });
+    await page.evaluate(
+      ({ isInternal }) => {
+        const { origin, pathname } = window.location;
+        const cleanUrl = isInternal ? origin + pathname : origin;
+        window.history.replaceState({}, "", cleanUrl);
+      },
+      {
+        isInternal:
+          type.toLowerCase().includes("interno") ||
+          (width === "300" && height === "1050"),
+      }
+    );
 
     logger.info("[INFO] URL limpa para base sem query params");
 
@@ -276,9 +290,9 @@ const takeDesktopScreenshotsService = async (
     logger.info(`[INFO] Print salvo: ${filename}`);
 
     // @moacirdavidag - Volto ao zoom normal
-    if(width === "300" && height === "1050") {
+    if (width === "300" && height === "1050") {
       await page.evaluate(() => {
-        document.body.style.zoom = '1.0'; 
+        document.body.style.zoom = "1.0";
       });
     }
 
