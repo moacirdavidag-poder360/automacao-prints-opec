@@ -54,11 +54,13 @@ const takeMobileScreenshotsService = async (campaign: ICampaignsObjectType) => {
     return;
   }
 
-  let typeSuffix = type.toLowerCase().includes("desktop") || type.toLowerCase().includes("interno")
-    ? "D"
-    : type.toLowerCase().includes("mobile")
-    ? "M"
-    : "";
+  let typeSuffix =
+    type.toLowerCase().includes("desktop") ||
+    type.toLowerCase().includes("interno")
+      ? "D"
+      : type.toLowerCase().includes("mobile")
+      ? "M"
+      : "";
 
   let kvPart = kvTotal && kvTotal > 1 ? `_KV${kvIndex}` : "";
 
@@ -163,89 +165,95 @@ const takeMobileScreenshotsService = async (campaign: ICampaignsObjectType) => {
     });
     await driver.switchTo().frame(iframe);
 
-    const findAdElement = async () => {
-      const frames = await driver!.findElements({ css: "iframe" });
+    await driver.executeScript(() => {
+      const closeBtn = document.querySelector(
+        ".ym-video-sticky-close"
+      ) as HTMLElement;
+      if (closeBtn) closeBtn.click();
+    });
 
-      for (const frame of frames) {
-        try {
-          await driver!.switchTo().frame(frame);
+    if (!(width === "320" && height === "50")) {
+      await driver.executeScript(() => {
+        const btn = document.querySelector(
+          ".box-banner-footer button"
+        ) as HTMLElement;
+        if (btn) btn.click();
+      });
+    }
 
-          const found = await driver!.executeScript(
-            `
-              const el = Array.from(document.querySelectorAll('*')).find(el => {
-                const rect = el.getBoundingClientRect();
-                return rect.width === arguments[0] && rect.height === arguments[1];
+    const findAndScroll = async () => {
+      for (let i = 0; i < 30; i++) {
+        const found = await driver!.executeScript(
+          ({ width, height }: {width: string, height: string}) => {
+            const iframe = Array.from(
+              document.querySelectorAll('iframe[id^="google_ads_iframe_"]')
+            ).find(
+              (el) =>
+                el.getAttribute("width") === String(width) &&
+                el.getAttribute("height") === String(height)
+            );
+
+            if (iframe) {
+              iframe.scrollIntoView({
+                block: "center",
+                behavior: "auto",
               });
-              return el || null;
-            `,
-            width,
-            height
-          );
+              return true;
+            }
 
-          if (found) {
-            logger.info(`[INFO] Anúncio encontrado dentro de iframe`);
-            return true;
-          }
-
-          await driver!.switchTo().parentFrame();
-        } catch {
-          await driver!.switchTo().parentFrame();
-        }
-      }
-
-      return false;
-    };
-
-    const waitForAd = async () => {
-      const start = Date.now();
-
-      while (Date.now() - start < 20000) {
-        let found = await driver!.executeScript(`
-            return Array.from(document.querySelectorAll('*')).some(el => {
-              const rect = el.getBoundingClientRect();
-              return rect.width === ${width} && rect.height === ${height};
-            });
-          `);
+            window.scrollBy(0, window.innerHeight * 0.7);
+            return false;
+          },
+          { width, height }
+        );
 
         if (found) {
-          logger.info(`[INFO] Anúncio encontrado no DOM principal`);
-        }
-
-        if (!found) {
-          found = await findAdElement();
-        }
-
-        if (found) {
-          logger.info(
-            `[INFO] Anúncio ${width}x${height} localizado com sucesso`
-          );
           return true;
         }
 
-        logger.warn(
-          `[WAIT] Anúncio ainda não encontrado, tentando novamente...`
-        );
-
-        robot.scrollMouse(0, -400);
-        await delay(700);
+        await delay(800);
       }
 
       return false;
     };
 
-    const found = await waitForAd();
+    const found = await findAndScroll();
 
     if (!found) {
       logger.error(
-        `[ERRO] Anúncio ${width}x${height} não encontrado após espera`
+        `[ERRO] Anúncio ${width}x${height} não encontrado após scroll inteligente`
       );
       return;
     }
 
-    logger.info(`[INFO] Iniciando fluxo da extensão para captura`);
+    await driver.executeScript(
+      ({ width, height }: {width: string, height: string}) => {
+        const iframes = document.querySelectorAll(
+          'iframe[id^="google_ads_iframe_"]'
+        );
+
+        iframes.forEach((iframe) => {
+          const w = iframe.getAttribute("width");
+          const h = iframe.getAttribute("height");
+
+          if (w !== String(width) || h !== String(height)) {
+            const el = iframe as HTMLElement;
+            el.style.display = "none";
+
+            const p1 = el.parentElement;
+            if (p1) p1.style.display = "none";
+
+            const p2 = p1?.parentElement;
+            if (p2) p2.style.display = "none";
+          }
+        });
+      },
+      { width, height }
+    );
+
+    logger.info(`[INFO] Anúncio encontrado e outros ocultados`);
 
     await driver!.switchTo().defaultContent();
-    logger.info(`[INFO] Contexto resetado para página principal`);
 
     const clickWhenVisible = async (by: any, label: string) => {
       const el = (await driver!.wait(async () => {
@@ -282,25 +290,20 @@ const takeMobileScreenshotsService = async (campaign: ICampaignsObjectType) => {
       "download PNG"
     );
 
-    logger.info(`Print mobile tirado com a extensão!`);
+    logger.info(`Print mobile tirado com a extensão`);
 
     const DOWNLOAD_PATH_DIR = process.env.DOWNLOAD_PATH_DIR as string;
-
     const originalFileName = "iPhone-13-PRO-www.poder360.com.br.png";
 
     const sourcePath = path.join(DOWNLOAD_PATH_DIR, originalFileName);
-
     const finalFilename = `${width}x${height}${kvPart}_${typeSuffix}.png`;
-
     const destinationPath = path.join(screenshotsDir, finalFilename);
 
     const waitForDownload = async (filePath: string, timeout = 15000) => {
       const start = Date.now();
 
       while (Date.now() - start < timeout) {
-        if (fs.existsSync(filePath)) {
-          return true;
-        }
+        if (fs.existsSync(filePath)) return true;
         await delay(500);
       }
 

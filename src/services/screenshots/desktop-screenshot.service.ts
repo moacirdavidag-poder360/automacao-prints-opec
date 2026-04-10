@@ -116,7 +116,7 @@ const takeDesktopScreenshotsService = async (
         "--window-position=0,0",
         "--window-size=1920,1080",
       ],
-      executablePath
+      executablePath,
     });
 
     const context = await browser.newContext({
@@ -148,6 +148,13 @@ const takeDesktopScreenshotsService = async (
         });
 
         await page.waitForTimeout(4000);
+
+        // @moacirdavidag - Eu diminuo o zoom para 50% para tirar print pq esse formato é muito grande
+        if(width === "300" && height === "1050") {
+          await page.evaluate(() => {
+            document.body.style.zoom = '0.5'; 
+          });
+        }
       }
     }
 
@@ -215,6 +222,12 @@ const takeDesktopScreenshotsService = async (
 
     await page.evaluate(
       ({ width, height }) => {
+        const closeBtn = document.querySelector(
+          ".ym-video-sticky-close"
+        ) as HTMLElement;
+
+        if (closeBtn) closeBtn.click();
+
         const iframes = document.querySelectorAll(
           'iframe[id^="google_ads_iframe_"]'
         );
@@ -238,6 +251,8 @@ const takeDesktopScreenshotsService = async (
       { width, height }
     );
 
+    logger.info("[INFO] Anúncio encontrado e outros ocultados no desktop");
+
     await page.waitForTimeout(2000);
 
     const filename = path.join(
@@ -249,7 +264,7 @@ const takeDesktopScreenshotsService = async (
       const cleanUrl = window.location.origin + window.location.pathname;
       window.history.replaceState({}, "", cleanUrl);
     });
-    
+
     logger.info("[INFO] URL limpa para base sem query params");
 
     await delay(1000);
@@ -259,6 +274,13 @@ const takeDesktopScreenshotsService = async (
     });
 
     logger.info(`[INFO] Print salvo: ${filename}`);
+
+    // @moacirdavidag - Volto ao zoom normal
+    if(width === "300" && height === "1050") {
+      await page.evaluate(() => {
+        document.body.style.zoom = '1.0'; 
+      });
+    }
 
     await uploadFileToDrive({
       filePath: filename,
