@@ -9,6 +9,8 @@ import getCampaignsService from "../services/campaigns/get-campaigns.service.js"
 
 import type { ICampaignsObjectType } from "../types/campaigns.type.js";
 
+
+
 const normalizeCampaigns = (
   campaigns: ICampaignsObjectType[]
 ): ICampaignsObjectType[] => {
@@ -155,13 +157,13 @@ const setupCronPrints = () => {
     try {
       logger.info("[CRON] Iniciando fluxo completo de campanhas");
 
-      const campaignsFromDB = await getCampaignsService();
+      // const campaignsFromDB = await getCampaignsService();
 
-      logger.info(`[CRON] Campanhas vindas do banco: ${campaignsFromDB.length}`);
+      // logger.info(`[CRON] Campanhas vindas do banco: ${campaignsFromDB.length}`);
 
-      await writeCampaignsService(campaignsFromDB);
+      // await writeCampaignsService(campaignsFromDB);
 
-      logger.info("[CRON] Planilha atualizada");
+      // logger.info("[CRON] Planilha atualizada");
 
       const campaignsFromSheet = await readCampaignSheetService();
 
@@ -178,10 +180,11 @@ const setupCronPrints = () => {
       for (const campaign of normalizedCampaigns) {
         const isMobile = campaign.format.type.toLowerCase() === "mobile";
         const isDesktop = campaign.format.type.toLowerCase() === "desktop";
+        const isInterno = campaign.format.type.toLowerCase() === "interno";
         if (isMobile) {
           await takeMobileScreenshotsService(campaign);
         }
-        if (isDesktop) {
+        if (isDesktop || isInterno) {
           await takeDesktopScreenshotsService(campaign);
         }
       }
